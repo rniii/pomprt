@@ -1,0 +1,7 @@
+{
+    "version": "0.2",
+    "language": "en-GB",
+    "allowCompoundWords": true,
+    "words": ["rini", "pomprt"],
+    "dictionaries": ["softwareTerms", "rust", "cpp"]
+}
