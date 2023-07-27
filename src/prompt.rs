@@ -12,13 +12,14 @@ use crate::{
     tty,
 };
 
-pub type Hinter = dyn Fn(&str) -> Option<String>;
+pub type Hinter = dyn Fn(&str, usize) -> Option<String>;
 
-pub type Highlighter = dyn Fn(&mut String);
+pub type Highlighter = dyn Fn(&mut String, usize);
 
 pub struct Prompt<'a> {
     prompt: &'a str,
     prev_tty: Option<tty::Params>,
+    history: Vec<String>,
     hinter: Option<Box<Hinter>>,
     highlighter: Option<Box<Highlighter>>,
 }
@@ -34,20 +35,21 @@ impl<'a> Prompt<'a> {
         Self {
             prompt,
             prev_tty,
+            history: Vec::with_capacity(64),
             hinter: None,
             highlighter: None,
         }
     }
 
     #[must_use]
-    pub fn hinter(mut self, hl: impl Fn(&str) -> Option<String> + 'static) -> Prompt<'a> {
-        self.hinter = Some(Box::new(hl));
+    pub fn hinter(mut self, f: impl Fn(&str, usize) -> Option<String> + 'static) -> Prompt<'a> {
+        self.hinter = Some(Box::new(f));
         self
     }
 
     #[must_use]
-    pub fn highlighter(mut self, hl: impl Fn(&mut String) + 'static) -> Prompt<'a> {
-        self.highlighter = Some(Box::new(hl));
+    pub fn highlighter(mut self, f: impl Fn(&mut String, usize) + 'static) -> Prompt<'a> {
+        self.highlighter = Some(Box::new(f));
         self
     }
 
@@ -55,7 +57,7 @@ impl<'a> Prompt<'a> {
         self.prompt = prompt;
     }
 
-    pub fn read(&self) -> io::Result<Option<String>> {
+    pub fn read(&mut self) -> io::Result<Option<String>> {
         // termios failed -- the output is likely not a terminal, so don't do any fancy stuff
         if self.prev_tty.is_none() {
             let mut line = String::with_capacity(64);
@@ -67,7 +69,9 @@ impl<'a> Prompt<'a> {
 
         let mut line = String::with_capacity(64);
         let mut seq = Vec::with_capacity(8);
-        let mut cursor = 0usize;
+        let mut cursor = 0;
+        let mut history_entry = self.history.len();
+        let mut saved_entry = String::default();
 
         write!(w, "\r{}", self.prompt)?;
         w.flush()?;
@@ -82,6 +86,23 @@ impl<'a> Prompt<'a> {
                 Ansi::C0(b'B') | Ansi::Csi([b'D']) if cursor > 0 => cursor -= 1,
                 // right
                 Ansi::C0(b'F') | Ansi::Csi([b'C']) if cursor < line.len() => cursor += 1,
+                // up
+                Ansi::Csi([b'A']) => {
+                    if history_entry == self.history.len() {
+                        saved_entry = line;
+                    }
+                    history_entry = history_entry.saturating_sub(1);
+                    line = self.history[history_entry].clone();
+                    cursor = line.len();
+                }
+                // down
+                Ansi::Csi([b'B']) => {
+                    if history_entry < self.history.len() {
+                        history_entry += 1;
+                    }
+                    line = self.history.get(history_entry).unwrap_or(&saved_entry).clone();
+                    cursor = line.len();
+                }
                 // interrupt or eof and no input -- bail
                 Ansi::C0(b'C') | Ansi::C0(b'D') if line.is_empty() => {
                     writeln!(w)?;
@@ -108,27 +129,29 @@ impl<'a> Prompt<'a> {
                     break;
                 }
                 // backspace
-                Ansi::Ascii(0x7f) => {
-                    if cursor > 0 {
-                        cursor -= 1;
-                        line.remove(cursor);
-                    }
+                Ansi::C0(b'?') if cursor > 0 => {
+                    cursor -= 1;
+                    line.remove(cursor);
                 }
                 // printable character
                 Ansi::Ascii(c) => {
-                    line.insert(cursor, c.into());
+                    line.insert(cursor, c);
                     cursor += 1;
                 }
-                c => todo!("{c:?}"),
+                _ => {}
             }
 
-            if let Some(ref hl) = self.hinter {
-                write!(w, "\n\x1b[K{}\x1b[A\x1b[m", hl(&line).unwrap_or_default())?;
+            if let Some(ref f) = self.hinter {
+                write!(
+                    w,
+                    "\n\x1b[K{}\x1b[A\x1b[m",
+                    f(&line, cursor).unwrap_or_default()
+                )?;
             }
 
-            if let Some(ref hl) = self.highlighter {
+            if let Some(ref f) = self.highlighter {
                 let mut rendered = line.clone();
-                hl(&mut rendered);
+                f(&mut rendered, cursor);
                 write!(w, "\r\x1b[K{}{}\x1b[m", self.prompt, rendered)?;
             } else {
                 write!(w, "\r\x1b[K{}{}", self.prompt, line)?;
@@ -139,6 +162,8 @@ impl<'a> Prompt<'a> {
             w.flush()?;
         }
 
+        self.history.push(line.clone());
+
         Ok(Some(line))
     }
 }
@@ -148,5 +173,13 @@ impl Drop for Prompt<'_> {
         if let Some(tty) = self.prev_tty {
             tty::set_params(tty);
         }
+    }
+}
+
+impl Iterator for Prompt<'_> {
+    type Item = io::Result<String>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.read().transpose()
     }
 }

@@ -4,6 +4,18 @@
 // pomprt is distributed under the Apache License version 2.0, as per COPYING
 // SPDX-License-Identifier: Apache-2.0
 
+//! pomprt, a tiny line-editor prompt
+//!
+//! # Example
+//!
+//! ```rs
+//! let prompt = Prompt::new("~> ");
+//!
+//! for line in prompt {
+//!     println!("{}", line?);
+//! }
+//! ```
+
 #![deny(unsafe_code)]
 
 pub mod ansi;
