@@ -22,7 +22,7 @@ mod unix {
         unsafe { (tcsetattr(0, TCSAFLUSH, &p) != -1).then_some(()) }
     }
 
-    pub const fn make_raw(p: Params) -> Params {
+    pub fn make_raw(p: Params) -> Params {
         let mut new = p;
         unsafe { cfmakeraw(&mut new) };
         // keep OPOST so we don't need to do \r\n manually
