@@ -92,7 +92,7 @@ impl<'a> Prompt<'a> {
                         saved_entry = line;
                     }
                     history_entry = history_entry.saturating_sub(1);
-                    line = self.history[history_entry].clone();
+                    line = self.history.get(history_entry).unwrap_or(&saved_entry).clone();
                     cursor = line.len();
                 }
                 // down
