@@ -4,27 +4,42 @@
 // pomprt is distributed under the Apache License version 2.0, as per COPYING
 // SPDX-License-Identifier: Apache-2.0
 
-use pomprt::Prompt;
-use std::io;
+struct LispEditor;
 
-fn main() -> io::Result<()> {
-    let prompt = Prompt::new("><> ")
-        .hinter(|line, _| {
-            let mut hint = line.chars().rev().collect::<String>();
-            hint.insert_str(0, "\x1b[90m");
-            Some(hint)
-        })
-        .highlighter(|line, _| {
-            let mut colors = ["\x1b[38;5;212m", "\x1b[38;5;227m", "\x1b[38;5;116m"]
-                .iter()
-                .cycle();
-            let mut i = 0;
-            while i < line.len() {
-                let color = colors.next().unwrap();
-                line.insert_str(i, color);
-                i += 1 + color.len();
-            }
+impl pomprt::Editor for LispEditor {
+    fn hint(&self, buffer: &str) -> Option<String> {
+        let mut hint = buffer.chars().rev().collect::<String>();
+        hint.insert_str(0, "\x1b[90m");
+        Some(hint)
+    }
+
+    fn highlight(&self, buffer: &str) -> String {
+        let mut hl = buffer.to_owned();
+        for (i, c) in buffer.char_indices().rev() {
+            let color = match c {
+                '(' | ')' => "\x1b[90m",
+                '0'..='9' => "\x1b[36m",
+                _ => "\x1b[35m",
+            };
+            hl.insert_str(i, color);
+        }
+        
+        hl
+    }
+
+    fn is_multiline(&self, buffer: &str) -> bool {
+        let mut depth = 0;
+        buffer.chars().for_each(|c| match c {
+            '(' => depth += 1,
+            ')' => depth -= 1,
+            _ => {}
         });
+        depth > 0
+    }
+}
+
+fn main() -> Result<(), pomprt::Error> {
+    let prompt = pomprt::multiline("><> ", "... ").editor(LispEditor);
 
     for line in prompt {
         println!("{}", line?);

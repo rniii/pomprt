@@ -9,9 +9,7 @@
 //! # Example
 //!
 //! ```rs
-//! let prompt = Prompt::new("~> ");
-//!
-//! for line in prompt {
+//! for line in pomprt::new("~> ") {
 //!     println!("{}", line?);
 //! }
 //! ```
@@ -19,7 +17,17 @@
 #![deny(unsafe_code)]
 
 pub mod ansi;
-mod tty;
 mod prompt;
+mod tty;
 
-pub use crate::prompt::Prompt;
+pub use crate::prompt::{Editor, Error, Event, Prompt};
+
+#[inline]
+pub fn new(prompt: &str) -> Prompt {
+    Prompt::new(prompt)
+}
+
+#[inline]
+pub fn multiline<'a>(prompt: &'a str, multiline: &'a str) -> Prompt<'a> {
+    Prompt::multiline(prompt, multiline)
+}

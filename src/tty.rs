@@ -6,9 +6,9 @@
 
 #![allow(unsafe_code)] // girl trust me
 
-#[cfg(target_family = "unix")]
+#[cfg(unix)]
 mod unix {
-    use libc::{cfmakeraw, tcgetattr, tcsetattr, OPOST, TCSAFLUSH};
+    use libc::{cfmakeraw, ioctl, tcgetattr, tcsetattr, winsize, OPOST, TCSAFLUSH, TIOCGWINSZ};
     use std::mem::zeroed;
 
     pub type Params = libc::termios;
@@ -29,15 +29,20 @@ mod unix {
         new.c_oflag |= OPOST;
         new
     }
+
+    pub fn get_width() -> Option<usize> {
+        let mut w = unsafe { zeroed::<winsize>() };
+        unsafe { (ioctl(0, TIOCGWINSZ, &mut w) != -1).then_some(w.ws_col as usize) }
+    }
 }
 
-#[cfg(target_family = "unix")]
+#[cfg(unix)]
 pub use unix::*;
 
 // TODO: consoleapi equivalent
 
-#[cfg(target_family = "windows")]
+#[cfg(windows)]
 mod windows {}
 
-#[cfg(target_family = "windows")]
+#[cfg(windows)]
 pub use windows::*;
