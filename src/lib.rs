@@ -22,7 +22,7 @@ mod prompt;
 mod tty;
 
 pub use crate::{
-    editor::{Event, DefaultEditor, Editor},
+    editor::{DefaultEditor, Editor, Event},
     prompt::{
         Error::{self, Eof, Interrupt},
         Prompt,

@@ -24,7 +24,7 @@ impl pomprt::Editor for LispEditor {
             };
             hl.insert_str(i, color);
         }
-        
+
         hl
     }
 

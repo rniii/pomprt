@@ -4,12 +4,14 @@
 // pomprt is distributed under the Apache License version 2.0, as per COPYING
 // SPDX-License-Identifier: Apache-2.0
 
-use std::io::{self, StdoutLock, Write};
+use std::io::{self, Write};
 
 use crate::{
     ansi::{Ansi, AnsiStdin},
     tty, Editor, Event,
 };
+
+type BufStdout<'a> = io::BufWriter<io::StdoutLock<'a>>;
 
 #[derive(Debug)]
 #[non_exhaustive]
@@ -50,7 +52,7 @@ pub struct Prompt<'a, E: Editor> {
 impl<'a, E: Editor> Prompt<'a, E> {
     #[must_use]
     pub fn new(prompt: &'a str) -> Self {
-        Self::multiline(prompt, prompt)
+        Self::multiline(prompt, "")
     }
 
     #[must_use]
@@ -77,7 +79,7 @@ impl<'a, E: Editor> Prompt<'a, E> {
         self.multiline = prompt;
     }
 
-    fn redisplay(&self, w: &mut StdoutLock, buf: &str, line: usize) -> io::Result<()> {
+    fn redisplay(&self, w: &mut BufStdout, buf: &str, line: usize) -> io::Result<()> {
         write!(w, "\x1b[{line};0H\x1b[J")?;
 
         let hl = self.editor.highlight(buf);
@@ -93,7 +95,8 @@ impl<'a, E: Editor> Prompt<'a, E> {
         Ok(())
     }
 
-    fn display_hint(&self, w: &mut StdoutLock, buf: &str) -> io::Result<()> {
+    fn redisplay_hint(&self, w: &mut BufStdout, buf: &str, line: usize) -> io::Result<()> {
+        self.redisplay(w, buf, line)?;
         if let Some(hint) = self.editor.hint(buf) {
             writeln!(w, "{hint}\x1b[m")?;
         }
@@ -103,7 +106,7 @@ impl<'a, E: Editor> Prompt<'a, E> {
 
     fn move_cursor(
         &self,
-        w: &mut StdoutLock,
+        w: &mut BufStdout,
         buf: &str,
         cur: usize,
         mut line: usize,
@@ -130,7 +133,7 @@ impl<'a, E: Editor> Prompt<'a, E> {
         w.flush()
     }
 
-    fn get_term_line(&self, r: &mut AnsiStdin, w: &mut StdoutLock) -> Result<usize, Error> {
+    fn get_term_line(&self, r: &mut AnsiStdin, w: &mut BufStdout) -> Result<usize, Error> {
         write!(w, "\x1b[6n")?;
         w.flush()?;
         match r.read_sequence()? {
@@ -156,7 +159,7 @@ impl<'a, E: Editor> Prompt<'a, E> {
         }
 
         let mut r = AnsiStdin::new(io::stdin().lock());
-        let mut w = io::stdout().lock();
+        let mut w = BufStdout::new(io::stdout().lock());
 
         let mut history_entry = self.history.len();
         let mut saved_entry = String::new();
@@ -171,58 +174,44 @@ impl<'a, E: Editor> Prompt<'a, E> {
             match self.editor.read_key(&mut r)? {
                 Event::Insert(c) => {
                     self.editor.insert(&mut buffer, &mut cursor, c);
-                    self.redisplay(&mut w, &buffer, line)?;
-                    self.display_hint(&mut w, &buffer)?;
+                    self.redisplay_hint(&mut w, &buffer, line)?;
                 }
                 Event::Enter if self.editor.is_multiline(&buffer) => {
-                    cursor = buffer[cursor..].find('\n').unwrap_or(buffer.len());
-                    buffer.insert(cursor, '\n');
-                    self.redisplay(&mut w, &buffer, line)?;
-                    self.display_hint(&mut w, &buffer)?;
+                    self.editor.insert(&mut buffer, &mut cursor, '\n');
+                    self.redisplay_hint(&mut w, &buffer, line)?;
                 }
                 Event::Enter => {
+                    self.history.push(buffer.clone());
                     self.redisplay(&mut w, &buffer, line)?;
-                    break;
+                    w.flush()?;
+                    return Ok(buffer);
                 }
                 Event::Tab => {
-                    buffer.insert_str(cursor, "    ");
-                    cursor += 4;
-                    self.redisplay(&mut w, &buffer, line)?;
-                    self.display_hint(&mut w, &buffer)?;
+                    self.editor.insert(&mut buffer, &mut cursor, '\t');
+                    self.redisplay_hint(&mut w, &buffer, line)?;
                 }
-                Event::Backspace => {
-                    if cursor > 0 {
-                        loop {
-                            cursor -= 1;
-                            if buffer.is_char_boundary(cursor) {
-                                break;
-                            }
-                        }
-                        buffer.remove(cursor);
-                        self.redisplay(&mut w, &buffer, line)?;
-                        self.display_hint(&mut w, &buffer)?;
-                    }
-                }
-                Event::Left => {
-                    if cursor > 0 {
-                        loop {
-                            cursor -= 1;
-                            if buffer.is_char_boundary(cursor) {
-                                break;
-                            }
+                Event::Backspace if cursor > 0 => {
+                    loop {
+                        cursor -= 1;
+                        if buffer.is_char_boundary(cursor) {
+                            break;
                         }
                     }
+                    buffer.remove(cursor);
+                    self.redisplay_hint(&mut w, &buffer, line)?;
                 }
-                Event::Right => {
-                    if cursor + 1 < buffer.len() {
-                        loop {
-                            cursor += 1;
-                            if buffer.is_char_boundary(cursor) {
-                                break;
-                            }
-                        }
+                Event::Left if cursor > 0 => loop {
+                    cursor -= 1;
+                    if buffer.is_char_boundary(cursor) {
+                        break;
                     }
-                }
+                },
+                Event::Right if cursor < buffer.len() => loop {
+                    cursor += 1;
+                    if buffer.is_char_boundary(cursor) {
+                        break;
+                    }
+                },
                 Event::Home => cursor = 0,
                 Event::End => cursor = buffer.len(),
                 Event::Interrupt if buffer.is_empty() => {
@@ -240,7 +229,6 @@ impl<'a, E: Editor> Prompt<'a, E> {
                     line = self.get_term_line(&mut r, &mut w)?;
                     self.redisplay(&mut w, &buffer, line)?;
                 }
-                Event::Eof => {}
                 Event::Suspend => {
                     #[cfg(unix)]
                     #[allow(unsafe_code)]
@@ -253,45 +241,39 @@ impl<'a, E: Editor> Prompt<'a, E> {
 
                         // once we're back, we need to put the tty in raw mode again
                         tty::set_params(tty::make_raw(self.prev_tty.unwrap()));
-                        self.redisplay(&mut w, &buffer, line)?;
-                        self.display_hint(&mut w, &buffer)?;
+                        line = self.get_term_line(&mut r, &mut w)?;
+                        self.redisplay_hint(&mut w, &buffer, line)?;
                     }
                 }
-                Event::Up => {
+                Event::Up if history_entry > 0 => {
                     if history_entry == self.history.len() {
                         saved_entry = buffer;
                     }
-                    history_entry = history_entry.saturating_sub(1);
+                    history_entry -= 1;
                     buffer = self
                         .history
                         .get(history_entry)
                         .unwrap_or(&saved_entry)
                         .clone();
                     cursor = buffer.len();
-                    self.redisplay(&mut w, &buffer, line)?;
-                    self.display_hint(&mut w, &buffer)?;
+                    self.redisplay_hint(&mut w, &buffer, line)?;
                 }
-                Event::Down => {
-                    if history_entry < self.history.len() {
-                        history_entry += 1;
-                        buffer = self
-                            .history
-                            .get(history_entry)
-                            .unwrap_or(&saved_entry)
-                            .clone();
-                        cursor = buffer.len();
-                        self.redisplay(&mut w, &buffer, line)?;
-                        self.display_hint(&mut w, &buffer)?;
-                    }
+                Event::Down if history_entry < self.history.len() => {
+                    history_entry += 1;
+                    buffer = self
+                        .history
+                        .get(history_entry)
+                        .unwrap_or(&saved_entry)
+                        .clone();
+                    cursor = buffer.len();
+                    self.redisplay_hint(&mut w, &buffer, line)?;
                 }
+                _ => continue,
             }
 
             self.move_cursor(&mut w, &buffer, cursor, line)?;
+            w.flush()?;
         }
-
-        self.history.push(buffer.clone());
-
-        Ok(buffer)
     }
 }
 

@@ -6,9 +6,9 @@
 
 use std::io;
 
-use crate::ansi::{AnsiStdin, Ansi};
+use crate::ansi::{Ansi, AnsiStdin};
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum Event {
     Insert(char),
     Enter,
@@ -79,4 +79,3 @@ pub trait Editor: Default {
 pub struct DefaultEditor;
 
 impl Editor for DefaultEditor {}
-
