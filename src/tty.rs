@@ -39,59 +39,62 @@ mod unix {
 #[cfg(unix)]
 pub use unix::*;
 
-// TODO: consoleapi equivalent
-
 #[cfg(windows)]
 mod windows {
     use winapi::{
         shared::minwindef::DWORD,
         um::{
             consoleapi::{GetConsoleMode, SetConsoleMode},
+            handleapi::INVALID_HANDLE_VALUE,
             processenv::GetStdHandle,
-            winbase::STD_OUTPUT_HANDLE,
+            winbase::{STD_INPUT_HANDLE, STD_OUTPUT_HANDLE},
             wincon::{
-                ENABLE_ECHO_INPUT, ENABLE_EXTENDED_FLAGS, ENABLE_INSERT_MODE, ENABLE_LINE_INPUT,
-                ENABLE_PROCESSED_INPUT, ENABLE_PROCESSED_OUTPUT, ENABLE_QUICK_EDIT_MODE,
+                GetConsoleScreenBufferInfo, CONSOLE_SCREEN_BUFFER_INFO, ENABLE_ECHO_INPUT,
+                ENABLE_LINE_INPUT, ENABLE_PROCESSED_INPUT, ENABLE_PROCESSED_OUTPUT,
                 ENABLE_VIRTUAL_TERMINAL_INPUT, ENABLE_VIRTUAL_TERMINAL_PROCESSING,
-                ENABLE_WINDOW_INPUT,
             },
         },
     };
 
-    pub type Params = DWORD;
+    pub type Params = (DWORD, DWORD);
 
-    pub fn get_params() -> Option<Params> {
-        let mut p: Params = 0;
-        unsafe { (GetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), &mut p) != -1).then_some(p) }
+    unsafe fn get_params_for(handle: DWORD) -> Option<DWORD> {
+        let handle = GetStdHandle(handle);
+        assert_ne!(handle, INVALID_HANDLE_VALUE);
+        let mut p = 0;
+        (GetConsoleMode(handle, &mut p) != 0).then_some(p)
     }
 
-    pub fn set_params(p: Params) -> Option<()> {
-        unsafe { (SetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), p) != -1).then_some(()) }
+    unsafe fn set_params_for(handle: DWORD, p: DWORD) -> Option<()> {
+        let handle = GetStdHandle(handle);
+        assert_ne!(handle, INVALID_HANDLE_VALUE);
+        (SetConsoleMode(handle, p) != 0).then_some(())
+    }
+
+    pub fn get_params() -> Option<Params> {
+        unsafe { get_params_for(STD_INPUT_HANDLE).zip(get_params_for(STD_OUTPUT_HANDLE)) }
+    }
+
+    pub fn set_params((i, o): Params) -> Option<()> {
+        unsafe { set_params_for(STD_INPUT_HANDLE, i).and(set_params_for(STD_OUTPUT_HANDLE, o)) }
     }
 
     pub const fn make_raw(p: Params) -> Params {
-        let mut new = p;
-        new &= !(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_PROCESSED_INPUT);
+        let (mut new_i, mut new_o) = p;
 
-        new &= !(ENABLE_LINE_INPUT
-            | ENABLE_ECHO_INPUT
-            | ENABLE_PROCESSED_INPUT
-            | ENABLE_PROCESSED_OUTPUT);
-        new |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
-        new |= ENABLE_VIRTUAL_TERMINAL_INPUT;
+        new_i &= !(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_PROCESSED_INPUT);
+        new_i |= ENABLE_VIRTUAL_TERMINAL_INPUT;
 
-        new
+        new_o |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+        new_o |= ENABLE_PROCESSED_OUTPUT;
+
+        (new_i, new_o)
     }
 
     pub fn get_width() -> Option<usize> {
-        use winapi::um::{
-            handleapi::INVALID_HANDLE_VALUE, winbase::STD_INPUT_HANDLE,
-            wincon::GetConsoleScreenBufferInfo, wincon::CONSOLE_SCREEN_BUFFER_INFO,
-        };
-
         unsafe {
             let mut info = std::mem::zeroed::<CONSOLE_SCREEN_BUFFER_INFO>();
-            let handle = GetStdHandle(STD_INPUT_HANDLE);
+            let handle = GetStdHandle(STD_OUTPUT_HANDLE);
 
             assert_ne!(handle, INVALID_HANDLE_VALUE);
 
