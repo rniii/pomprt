@@ -9,7 +9,7 @@
 //! # Example
 //!
 //! ```rs
-//! for line in pomprt::new("~> ") {
+//! for line in pomprt::simple("~> ") {
 //!     println!("{}", line?);
 //! }
 //! ```
@@ -17,17 +17,32 @@
 #![deny(unsafe_code)]
 
 pub mod ansi;
+mod editor;
 mod prompt;
 mod tty;
 
-pub use crate::prompt::{Editor, Error, Event, Prompt};
+pub use crate::{
+    editor::{DefaultEditor, Editor, Event},
+    prompt::{
+        Error::{self, Eof, Interrupt},
+        Prompt,
+    },
+};
 
 #[inline]
-pub fn new(prompt: &str) -> Prompt {
+#[must_use]
+pub fn new<E: Editor>(prompt: &str) -> Prompt<E> {
     Prompt::new(prompt)
 }
 
 #[inline]
-pub fn multiline<'a>(prompt: &'a str, multiline: &'a str) -> Prompt<'a> {
+#[must_use]
+pub fn multiline<'a, E: Editor>(prompt: &'a str, multiline: &'a str) -> Prompt<'a, E> {
     Prompt::multiline(prompt, multiline)
+}
+
+#[inline]
+#[must_use]
+pub fn simple(prompt: &str) -> Prompt<DefaultEditor> {
+    Prompt::new(prompt)
 }

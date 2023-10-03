@@ -4,6 +4,7 @@
 // pomprt is distributed under the Apache License version 2.0, as per COPYING
 // SPDX-License-Identifier: Apache-2.0
 
+#[derive(Default)]
 struct LispEditor;
 
 impl pomprt::Editor for LispEditor {
@@ -23,7 +24,7 @@ impl pomprt::Editor for LispEditor {
             };
             hl.insert_str(i, color);
         }
-        
+
         hl
     }
 
@@ -39,7 +40,7 @@ impl pomprt::Editor for LispEditor {
 }
 
 fn main() -> Result<(), pomprt::Error> {
-    let prompt = pomprt::multiline("><> ", "... ").editor(LispEditor);
+    let prompt = pomprt::multiline::<LispEditor>("><> ", "... ");
 
     for line in prompt {
         println!("{}", line?);
