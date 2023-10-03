@@ -39,10 +39,69 @@ mod unix {
 #[cfg(unix)]
 pub use unix::*;
 
-// TODO: consoleapi equivalent
-
 #[cfg(windows)]
-mod windows {}
+mod windows {
+    use winapi::{
+        shared::minwindef::DWORD,
+        um::{
+            consoleapi::{GetConsoleMode, SetConsoleMode},
+            handleapi::INVALID_HANDLE_VALUE,
+            processenv::GetStdHandle,
+            winbase::{STD_INPUT_HANDLE, STD_OUTPUT_HANDLE},
+            wincon::{
+                GetConsoleScreenBufferInfo, CONSOLE_SCREEN_BUFFER_INFO, ENABLE_ECHO_INPUT,
+                ENABLE_LINE_INPUT, ENABLE_PROCESSED_INPUT, ENABLE_PROCESSED_OUTPUT,
+                ENABLE_VIRTUAL_TERMINAL_INPUT, ENABLE_VIRTUAL_TERMINAL_PROCESSING,
+            },
+        },
+    };
+
+    pub type Params = (DWORD, DWORD);
+
+    unsafe fn get_params_for(handle: DWORD) -> Option<DWORD> {
+        let handle = GetStdHandle(handle);
+        assert_ne!(handle, INVALID_HANDLE_VALUE);
+        let mut p = 0;
+        (GetConsoleMode(handle, &mut p) != 0).then_some(p)
+    }
+
+    unsafe fn set_params_for(handle: DWORD, p: DWORD) -> Option<()> {
+        let handle = GetStdHandle(handle);
+        assert_ne!(handle, INVALID_HANDLE_VALUE);
+        (SetConsoleMode(handle, p) != 0).then_some(())
+    }
+
+    pub fn get_params() -> Option<Params> {
+        unsafe { get_params_for(STD_INPUT_HANDLE).zip(get_params_for(STD_OUTPUT_HANDLE)) }
+    }
+
+    pub fn set_params((i, o): Params) -> Option<()> {
+        unsafe { set_params_for(STD_INPUT_HANDLE, i).and(set_params_for(STD_OUTPUT_HANDLE, o)) }
+    }
+
+    pub const fn make_raw(p: Params) -> Params {
+        let (mut new_i, mut new_o) = p;
+
+        new_i &= !(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_PROCESSED_INPUT);
+        new_i |= ENABLE_VIRTUAL_TERMINAL_INPUT;
+
+        new_o |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+        new_o |= ENABLE_PROCESSED_OUTPUT;
+
+        (new_i, new_o)
+    }
+
+    pub fn get_width() -> Option<usize> {
+        unsafe {
+            let mut info = std::mem::zeroed::<CONSOLE_SCREEN_BUFFER_INFO>();
+            let handle = GetStdHandle(STD_OUTPUT_HANDLE);
+
+            assert_ne!(handle, INVALID_HANDLE_VALUE);
+
+            (GetConsoleScreenBufferInfo(handle, &mut info) != 0).then_some(info.dwSize.X as usize)
+        }
+    }
+}
 
 #[cfg(windows)]
 pub use windows::*;
