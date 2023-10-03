@@ -51,7 +51,9 @@ mod windows {
             winbase::STD_OUTPUT_HANDLE,
             wincon::{
                 ENABLE_ECHO_INPUT, ENABLE_EXTENDED_FLAGS, ENABLE_INSERT_MODE, ENABLE_LINE_INPUT,
-                ENABLE_PROCESSED_INPUT, ENABLE_QUICK_EDIT_MODE, ENABLE_WINDOW_INPUT,
+                ENABLE_PROCESSED_INPUT, ENABLE_PROCESSED_OUTPUT, ENABLE_QUICK_EDIT_MODE,
+                ENABLE_VIRTUAL_TERMINAL_INPUT, ENABLE_VIRTUAL_TERMINAL_PROCESSING,
+                ENABLE_WINDOW_INPUT,
             },
         },
     };
@@ -71,12 +73,30 @@ mod windows {
         let mut new = p;
         new &= !(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_PROCESSED_INPUT);
 
-        new |= ENABLE_EXTENDED_FLAGS;
-        new |= ENABLE_INSERT_MODE;
-        new |= ENABLE_QUICK_EDIT_MODE;
-        new |= ENABLE_WINDOW_INPUT;
+        new &= !(ENABLE_LINE_INPUT
+            | ENABLE_ECHO_INPUT
+            | ENABLE_PROCESSED_INPUT
+            | ENABLE_PROCESSED_OUTPUT);
+        new |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+        new |= ENABLE_VIRTUAL_TERMINAL_INPUT;
 
         new
+    }
+
+    pub fn get_width() -> Option<usize> {
+        use winapi::um::{
+            handleapi::INVALID_HANDLE_VALUE, winbase::STD_INPUT_HANDLE,
+            wincon::GetConsoleScreenBufferInfo, wincon::CONSOLE_SCREEN_BUFFER_INFO,
+        };
+
+        unsafe {
+            let mut info = std::mem::zeroed::<CONSOLE_SCREEN_BUFFER_INFO>();
+            let handle = GetStdHandle(STD_INPUT_HANDLE);
+
+            assert_ne!(handle, INVALID_HANDLE_VALUE);
+
+            (GetConsoleScreenBufferInfo(handle, &mut info) != 0).then_some(info.dwSize.X as usize)
+        }
     }
 }
 
