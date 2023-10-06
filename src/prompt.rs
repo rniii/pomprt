@@ -1,5 +1,5 @@
 // pomprt, a line editor prompt library
-// Copyright (c) 2023 Rini
+// Copyright (c) 2023 rini
 //
 // pomprt is distributed under the Apache License version 2.0, as per COPYING
 // SPDX-License-Identifier: Apache-2.0
@@ -43,7 +43,7 @@ pub struct Prompt<'a, E: Editor> {
     multiline: &'a str,
     prev_tty: Option<tty::Params>,
     pub editor: E,
-    history: Vec<String>,
+    pub history: Vec<String>,
 }
 
 impl<'a, E: Editor> Prompt<'a, E> {
@@ -162,7 +162,7 @@ impl<'a, E: Editor> Prompt<'a, E> {
                 #[allow(unsafe_code)]
                 Event::Suspend => unsafe {
                     // SIGTSTP is what usually happens -- the process gets put in the background
-                    assert!(libc::kill(std::process::id() as i32, libc::SIGTSTP) != -1);
+                    libc::kill(std::process::id() as i32, libc::SIGTSTP);
                     // once we're back, we need to put the tty in raw mode again
                     tty::set_params(tty::make_raw(self.prev_tty.unwrap()));
                     self.redraw(&mut w, &buffer, width)?;
@@ -252,13 +252,13 @@ impl<'a, E: Editor> Prompt<'a, E> {
         }
         col += 1;
         lines -= 1;
-        if lines != 0 {
+        if lines == 0 {
+            write!(w, "\x1b[{col}G")?;
+            w.flush()
+        } else {
             write!(w, "\x1b[{lines}E\x1b[{col}G")?;
             w.flush()?;
             write!(w, "\x1b[{lines}F") // defer moving back cursor to next redraw
-        } else {
-            write!(w, "\x1b[{col}G")?;
-            w.flush()
         }
     }
 }

@@ -1,16 +1,24 @@
 // pomprt, a line editor prompt library
-// Copyright (c) 2023 Rini
+// Copyright (c) 2023 rini
 //
 // pomprt is distributed under the Apache License version 2.0, as per COPYING
 // SPDX-License-Identifier: Apache-2.0
 
-//! pomprt, a tiny line-editor prompt
+//! pomprt, a tiny and extensible readline implementation built from scratch
 //!
 //! # Example
 //!
 //! ```rs
-//! for line in pomprt::simple("~> ") {
-//!     println!("{}", line?);
+//! fn main() {
+//!     let mut pomprt = pomprt::simple("><> ");
+//!     loop {
+//!         match pomprt.read() {
+//!             Ok(input) => println!("{input}"),
+//!             Err(pomprt::Eof) => return println!("ctrl-d"),
+//!             Err(pomprt::Interrupt) => return println!("ctrl-c"),
+//!             Err(e) => return println!("error: {e}"),
+//!         }
+//!     }
 //! }
 //! ```
 
