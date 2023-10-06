@@ -69,6 +69,10 @@ pub trait Editor: Default {
         None
     }
 
+    fn highlight_hint(&self, hint: &str) -> String {
+        hint.to_owned()
+    }
+
     fn is_multiline(&self, buffer: &str) -> bool {
         let _ = buffer;
         false

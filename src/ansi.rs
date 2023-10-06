@@ -75,18 +75,3 @@ impl<R: Read> AnsiReader<R> {
         Ok(ansi)
     }
 }
-
-pub fn strip_sequences(buf: &str) -> String {
-    let mut stripped = String::new();
-    let mut reader = AnsiReader::new(buf.as_bytes());
-
-    while let Ok(seq) = reader.read_sequence() {
-        match seq {
-            Ansi::Char(c) => stripped.push(c),
-            Ansi::Control(c) => stripped.push(char::from(c ^ 0x40)),
-            _ => {}
-        }
-    }
-
-    stripped
-}

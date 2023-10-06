@@ -9,9 +9,11 @@ struct LispEditor;
 
 impl pomprt::Editor for LispEditor {
     fn hint(&self, buffer: &str) -> Option<String> {
-        let mut hint = buffer.chars().rev().collect::<String>();
-        hint.insert_str(0, "\x1b[90m");
-        Some(hint)
+        Some(buffer.chars().rev().collect::<String>())
+    }
+
+    fn highlight_hint(&self, hint: &str) -> String {
+        "\x1b[90m".to_owned() + hint
     }
 
     fn highlight(&self, buffer: &str) -> String {
