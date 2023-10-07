@@ -323,6 +323,18 @@ impl<E: Editor> Iterator for Prompt<'_, E> {
 fn set_tty() -> Option<tty::Params> {
     tty::get_params().map(|tty| {
         tty::set_params(tty::make_raw(tty));
+
+        // for users compiling with panic = "abort", `Prompt` will not be dropped
+        // we restore the terminal in here instead
+        #[cfg(panic = "abort")]
+        {
+            let hook = std::panic::take_hook();
+            std::panic::set_hook(Box::new(move |info| {
+                tty::set_params(tty);
+                hook(info);
+            }));
+        }
+
         tty
     })
 }
