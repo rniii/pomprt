@@ -10,12 +10,17 @@ use crate::{ansi::AnsiStdin, tty, Editor, Event};
 
 type BufStdout<'a> = io::BufWriter<io::StdoutLock<'a>>;
 
+/// Error returned by [`Prompt::read`]
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum Error {
+    /// End of file reached (ctrl-d)
     Eof,
+    /// Interrupt signal (ctrl-c)
     Interrupt,
+    /// Tried to query something about the terminal, but failed
     DumbTerminal,
+    /// Error ocurred during read/write
     Io(io::Error),
 }
 
@@ -38,44 +43,81 @@ impl From<io::Error> for Error {
     }
 }
 
+/// The pomprt prompt
+///
+/// See the [crate's documentation](crate) for more details
 pub struct Prompt<'a, E: Editor> {
     prompt: &'a str,
     multiline: &'a str,
     prev_tty: Option<tty::Params>,
+    /// The current [Editor]
     pub editor: E,
+    /// Input history. Entries are added automatically by [`Prompt::read`]
     pub history: Vec<String>,
 }
 
 impl<'a, E: Editor> Prompt<'a, E> {
+    /// Construct a new prompt
+    #[inline]
     #[must_use]
-    pub fn new(prompt: &'a str) -> Self {
-        Self::multiline(prompt, "")
+    pub fn new(prompt: &'a str) -> Self
+    where
+        E: Default,
+    {
+        Self::with(E::default(), prompt)
     }
 
+    /// Construct a new multiline prompt
+    #[inline]
     #[must_use]
-    pub fn multiline(prompt: &'a str, multiline: &'a str) -> Self {
-        let prev_tty = tty::get_params();
-        if let Some(tty) = prev_tty {
-            tty::set_params(tty::make_raw(tty));
-        }
+    pub fn multiline(prompt: &'a str, multiline: &'a str) -> Self
+    where
+        E: Default,
+    {
+        Self::with_multiline(E::default(), prompt, multiline)
+    }
 
+    /// Construct a new prompt with a given editor
+    #[inline]
+    #[must_use]
+    pub fn with(editor: E, prompt: &'a str) -> Self {
+        Self::with_multiline(editor, prompt, "")
+    }
+
+    /// Construct a new multiline prompt with a given editor
+    #[inline]
+    #[must_use]
+    pub fn with_multiline(editor: E, prompt: &'a str, multiline: &'a str) -> Self {
         Self {
             prompt,
             multiline,
-            prev_tty,
-            editor: E::default(),
+            prev_tty: set_tty(),
+            editor,
             history: Vec::with_capacity(64),
         }
     }
 
+    /// Set the current prompt
     pub fn set_prompt(&mut self, prompt: &'a str) {
         self.prompt = prompt;
     }
 
+    /// Set the current multiline prompt
     pub fn set_multiline(&mut self, prompt: &'a str) {
         self.multiline = prompt;
     }
 
+    /// Set the current editor
+    pub fn set_editor(&mut self, editor: E) {
+        self.editor = editor;
+    }
+
+    /// Start the prompt and read user input
+    ///
+    /// # Errors
+    ///
+    /// May return [`Error::Eof`] or [`Error::Interrupt`] on user input. Other errors might occur:
+    /// see [`Error`]
     pub fn read(&mut self) -> Result<String, Error> {
         let mut buffer = String::with_capacity(128);
 
@@ -104,7 +146,7 @@ impl<'a, E: Editor> Prompt<'a, E> {
                     self.editor.insert(&mut buffer, &mut cursor, c);
                     self.redraw(&mut w, &buffer, width)?;
                 }
-                Event::Enter if self.editor.is_multiline(&buffer) => {
+                Event::Enter if self.editor.is_multiline(&buffer, cursor) => {
                     self.editor.insert(&mut buffer, &mut cursor, '\n');
                     self.redraw(&mut w, &buffer, width)?;
                 }
@@ -114,10 +156,6 @@ impl<'a, E: Editor> Prompt<'a, E> {
                     writeln!(w)?;
                     w.flush()?;
                     return Ok(buffer);
-                }
-                Event::Tab => {
-                    self.editor.insert(&mut buffer, &mut cursor, '\t');
-                    self.redraw(&mut w, &buffer, width)?;
                 }
                 Event::Backspace if cursor > 0 => loop {
                     cursor -= 1;
@@ -200,14 +238,15 @@ impl<'a, E: Editor> Prompt<'a, E> {
     fn display_buffer(&self, w: &mut BufStdout, buf: &str, width: usize) -> io::Result<usize> {
         write!(w, "\r\x1b[J")?;
 
+        let hl = &self.editor.highlight(buf);
         let prompt = self.editor.highlight_prompt(self.prompt, false);
         let multiline = self.editor.highlight_prompt(self.multiline, true);
         let mut cur_prompt = &prompt;
-        for line in self.editor.highlight(buf).split_inclusive('\n') {
+        for line in hl.split_inclusive('\n') {
             write!(w, "{cur_prompt}\x1b[m{line}\x1b[m")?;
             cur_prompt = &multiline;
         }
-        if buf.is_empty() || buf.ends_with('\n') {
+        if hl.is_empty() || hl.ends_with('\n') {
             write!(w, "{cur_prompt}\x1b[m")?;
         }
 
@@ -263,6 +302,7 @@ impl<'a, E: Editor> Prompt<'a, E> {
     }
 }
 
+/// Resets the terminal mode back to it's previous state
 impl<E: Editor> Drop for Prompt<'_, E> {
     fn drop(&mut self) {
         if let Some(tty) = self.prev_tty {
@@ -271,6 +311,7 @@ impl<E: Editor> Drop for Prompt<'_, E> {
     }
 }
 
+/// Iterates through [`Prompt::read`], until either [`Error::Eof`] or [`Error::Interrupt`] is reached
 impl<E: Editor> Iterator for Prompt<'_, E> {
     type Item = Result<String, Error>;
 
@@ -280,6 +321,13 @@ impl<E: Editor> Iterator for Prompt<'_, E> {
             r => Some(r),
         }
     }
+}
+
+fn set_tty() -> Option<tty::Params> {
+    tty::get_params().map(|tty| {
+        tty::set_params(tty::make_raw(tty));
+        tty
+    })
 }
 
 fn count_lines<I>(lengths: I, width: usize) -> usize

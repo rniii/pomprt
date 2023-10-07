@@ -9,7 +9,7 @@ A tiny and extensible readline implementation built from scratch
 - well supported: any terminal you can think of nowadays probably Just Works
 - actually tiny: ~500 SLoC, only depends on `libc` or `winapi`
 
-```rs
+```rust
 fn main() {
     let mut pomprt = pomprt::simple("><> ");
     loop {

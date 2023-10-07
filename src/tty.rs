@@ -18,8 +18,8 @@ mod unix {
         unsafe { (tcgetattr(0, &mut p) != -1).then_some(p) }
     }
 
-    pub fn set_params(p: Params) -> Option<()> {
-        unsafe { (tcsetattr(0, TCSAFLUSH, &p) != -1).then_some(()) }
+    pub fn set_params(p: Params) {
+        unsafe { tcsetattr(0, TCSAFLUSH, &p) };
     }
 
     pub fn make_raw(p: Params) -> Params {
@@ -65,18 +65,21 @@ mod windows {
         (GetConsoleMode(handle, &mut p) != 0).then_some(p)
     }
 
-    unsafe fn set_params_for(handle: DWORD, p: DWORD) -> Option<()> {
+    unsafe fn set_params_for(handle: DWORD, p: DWORD) {
         let handle = GetStdHandle(handle);
         assert_ne!(handle, INVALID_HANDLE_VALUE);
-        (SetConsoleMode(handle, p) != 0).then_some(())
+        SetConsoleMode(handle, p);
     }
 
     pub fn get_params() -> Option<Params> {
         unsafe { get_params_for(STD_INPUT_HANDLE).zip(get_params_for(STD_OUTPUT_HANDLE)) }
     }
 
-    pub fn set_params((i, o): Params) -> Option<()> {
-        unsafe { set_params_for(STD_INPUT_HANDLE, i).and(set_params_for(STD_OUTPUT_HANDLE, o)) }
+    pub fn set_params((i, o): Params) {
+        unsafe {
+            set_params_for(STD_INPUT_HANDLE, i);
+            set_params_for(STD_OUTPUT_HANDLE, o);
+        }
     }
 
     pub const fn make_raw(p: Params) -> Params {

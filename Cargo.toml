@@ -1,9 +1,9 @@
 [package]
 name = "pomprt"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["rini <rini@rinici.de>"]
 edition = "2021"
-description = "a tiny prompt library"
+description = "A tiny readline implementaiton built from scratch"
 repository = "https://codeberg.org/twink/pomprt"
 license = "Apache-2.0"
 

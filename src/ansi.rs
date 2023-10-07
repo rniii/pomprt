@@ -4,27 +4,39 @@
 // pomprt is distributed under the Apache License version 2.0, as per COPYING
 // SPDX-License-Identifier: Apache-2.0
 
+//! Helper module for reading and parsing ANSI sequences
+
 use std::io::{Read, StdinLock};
 
+/// A single ANSI sequence, usually corresponding to a single keypress
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Ansi<'a> {
+    /// A normal Unicode character
     Char(char),
+    /// An ASCII control character in [caret notation](https://en.wikipedia.org/wiki/Caret_notation)
     Control(u8),
+    /// An [extended control character](https://en.wikipedia.org/wiki/C0_and_C1_control_codes)
     Esc(u8),
+    /// A [Control Sequence Introducer](CSI) sequence
+    ///
+    /// [CSI]: (https://en.wikipedia.org/wiki/ANSI_escape_code#CSI_(Control_Sequence_Introducer)_sequences)
     Csi(&'a [u8]),
 }
 
 const ESC: u8 = b'[' ^ 0x40;
 const DEL: u8 = b'?' ^ 0x40;
 
+/// A wrapper around a reader that can read ANSI sequences one-by-one
 pub struct AnsiReader<R: Read> {
     input: R,
     buffer: Vec<u8>,
 }
 
+/// A reader around
 pub type AnsiStdin<'a> = AnsiReader<StdinLock<'a>>;
 
 impl<R: Read> AnsiReader<R> {
+    /// Creates a new ANSI reader for the given input
     pub fn new(input: R) -> Self {
         Self {
             input,
@@ -40,6 +52,7 @@ impl<R: Read> AnsiReader<R> {
         Ok(self.buffer[p])
     }
 
+    /// Reads a single [Ansi] sequence from input
     pub fn read_sequence(&mut self) -> std::io::Result<Ansi> {
         self.buffer.clear();
         let ansi = match self.read_byte()? {
