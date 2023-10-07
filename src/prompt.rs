@@ -138,18 +138,19 @@ impl<'a, E: Editor> Prompt<'a, E> {
 
         loop {
             let width = tty::get_width().ok_or(Error::DumbTerminal)?;
+            let mut written = 0;
             match self.editor.read_key(&mut r)? {
                 Event::Insert(c) => {
                     self.editor.insert(&mut buffer, &mut cursor, c);
-                    self.redraw(&mut w, &buffer, width)?;
+                    written += self.redraw(&mut w, &buffer, width)?;
                 }
                 Event::Enter if self.editor.is_multiline(&buffer, cursor) => {
                     self.editor.insert(&mut buffer, &mut cursor, '\n');
-                    self.redraw(&mut w, &buffer, width)?;
+                    written += self.redraw(&mut w, &buffer, width)?;
                 }
                 Event::Enter => {
                     self.history.push(buffer.clone());
-                    self.display_buffer(&mut w, &buffer, width)?;
+                    self.display_buffer(&mut w, &buffer)?;
                     writeln!(w)?;
                     w.flush()?;
                     return Ok(buffer);
@@ -158,7 +159,7 @@ impl<'a, E: Editor> Prompt<'a, E> {
                     cursor -= 1;
                     if buffer.is_char_boundary(cursor) {
                         buffer.remove(cursor);
-                        self.redraw(&mut w, &buffer, width)?;
+                        written += self.redraw(&mut w, &buffer, width)?;
                         break;
                     }
                 },
@@ -177,21 +178,21 @@ impl<'a, E: Editor> Prompt<'a, E> {
                 Event::Home => cursor = 0,
                 Event::End => cursor = buffer.len(),
                 Event::Interrupt if buffer.is_empty() => {
-                    self.display_buffer(&mut w, &buffer, width)?;
+                    self.display_buffer(&mut w, &buffer)?;
                     writeln!(w)?;
                     return Err(Error::Interrupt);
                 }
                 Event::Eof if buffer.is_empty() => {
-                    self.display_buffer(&mut w, &buffer, width)?;
+                    self.display_buffer(&mut w, &buffer)?;
                     writeln!(w)?;
                     return Err(Error::Eof);
                 }
                 Event::Interrupt => {
-                    self.display_buffer(&mut w, &buffer, width)?;
+                    self.display_buffer(&mut w, &buffer)?;
                     writeln!(w)?;
                     cursor = 0;
                     buffer.clear();
-                    self.redraw(&mut w, &buffer, width)?;
+                    written += self.redraw(&mut w, &buffer, width)?;
                 }
                 #[cfg(unix)]
                 #[allow(unsafe_code)]
@@ -200,7 +201,7 @@ impl<'a, E: Editor> Prompt<'a, E> {
                     libc::kill(std::process::id() as i32, libc::SIGTSTP);
                     // once we're back, we need to put the tty in raw mode again
                     tty::set_params(tty::make_raw(self.prev_tty.unwrap()));
-                    self.redraw(&mut w, &buffer, width)?;
+                    written += self.redraw(&mut w, &buffer, width)?;
                 },
                 Event::Up if history_entry > 0 => {
                     if history_entry == self.history.len() {
@@ -213,7 +214,7 @@ impl<'a, E: Editor> Prompt<'a, E> {
                         .unwrap_or(&saved_entry)
                         .clone();
                     cursor = buffer.len();
-                    self.redraw(&mut w, &buffer, width)?;
+                    written += self.redraw(&mut w, &buffer, width)?;
                 }
                 Event::Down if history_entry < self.history.len() => {
                     history_entry += 1;
@@ -223,16 +224,37 @@ impl<'a, E: Editor> Prompt<'a, E> {
                         .unwrap_or(&saved_entry)
                         .clone();
                     cursor = buffer.len();
-                    self.redraw(&mut w, &buffer, width)?;
+                    written += self.redraw(&mut w, &buffer, width)?;
                 }
                 _ => continue,
             }
 
-            self.move_cursor(&mut w, &buffer[..cursor], width)?;
+            let mut col = 0;
+            let line = self
+                .buf_lengths(&buffer[..cursor])
+                .inspect(|len| col = len % width + 1)
+                .map(|len| len / width + 1)
+                .sum::<usize>()
+                - 1;
+
+            let rewind = if line > written {
+                write!(w, "{}", "\n".repeat(line - written))?;
+                line
+            } else if line != written {
+                write!(w, "\x1b[{}E", written - line)?;
+                written - line
+            } else {
+                written
+            };
+            write!(w, "\x1b[{col}G")?;
+            w.flush()?;
+            if rewind != 0 {
+                write!(w, "\x1b[{rewind}F")?; // defer moving back cursor to next redraw
+            }
         }
     }
 
-    fn display_buffer(&self, w: &mut BufStdout, buf: &str, width: usize) -> io::Result<usize> {
+    fn display_buffer(&self, w: &mut BufStdout, buf: &str) -> io::Result<()> {
         write!(w, "\r\x1b[J")?;
 
         let hl = &self.editor.highlight(buf);
@@ -247,55 +269,29 @@ impl<'a, E: Editor> Prompt<'a, E> {
             write!(w, "{cur_prompt}\x1b[m")?;
         }
 
-        let prompt = self.prompt.len();
-        let multiline = self.multiline.len();
-        let mut cur_prompt = prompt;
-        Ok(count_lines(
-            buf.split('\n').map(|line| {
-                let len = cur_prompt + line.chars().count();
-                cur_prompt = multiline;
-                len
-            }),
-            width,
-        ))
+        Ok(())
     }
 
-    fn redraw(&self, w: &mut BufStdout, buf: &str, width: usize) -> io::Result<()> {
-        let mut lines = self.display_buffer(w, buf, width)?;
+    fn redraw(&self, w: &mut BufStdout, buf: &str, width: usize) -> io::Result<usize> {
+        self.display_buffer(w, buf)?;
+        let mut lines = count_lines(self.buf_lengths(buf), width);
         if let Some(hint) = self.editor.hint(buf) {
             write!(w, "\n{}\x1b[m", self.editor.highlight_hint(&hint))?;
             lines += count_lines(hint.split('\n').map(|line| line.chars().count()), width) + 1;
         }
 
-        if lines != 0 {
-            write!(w, "\x1b[{lines}F")?;
-        }
-
-        Ok(())
+        Ok(lines)
     }
 
-    fn move_cursor(&self, w: &mut BufStdout, buf: &str, width: usize) -> io::Result<()> {
+    fn buf_lengths(&self, buf: &'a str) -> impl Iterator<Item = usize> + 'a {
         let prompt = self.prompt.chars().count();
         let multiline = self.multiline.chars().count();
         let mut cur_prompt = prompt;
-        let mut lines = 0;
-        let mut col = 0;
-        for line in buf.split('\n') {
-            col = cur_prompt + line.chars().count();
-            lines += col / width + 1;
-            col %= width;
+        buf.split('\n').map(move |line| {
+            let len = cur_prompt + line.chars().count();
             cur_prompt = multiline;
-        }
-        col += 1;
-        lines -= 1;
-        if lines == 0 {
-            write!(w, "\x1b[{col}G")?;
-            w.flush()
-        } else {
-            write!(w, "\x1b[{lines}E\x1b[{col}G")?;
-            w.flush()?;
-            write!(w, "\x1b[{lines}F") // defer moving back cursor to next redraw
-        }
+            len
+        })
     }
 }
 
