@@ -10,7 +10,7 @@ struct LispEditor;
 impl pomprt::Editor for LispEditor {
     fn insert(&self, buffer: &mut String, cursor: &mut usize, c: char) {
         // only insert closing parens if not followed by another closing parens
-        if c != ')' || buffer[..*cursor].ends_with(')') {
+        if !(c == ')' && buffer[*cursor..].starts_with(')')) {
             buffer.insert(*cursor, c);
         }
         // move the cursor forward by the character
