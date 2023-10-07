@@ -40,28 +40,24 @@ pub use crate::{
 
 /// Construct a new [`Prompt`]
 #[inline]
-#[must_use]
 pub fn new<E: Editor + Default>(prompt: &str) -> Prompt<E> {
     Prompt::new(prompt)
 }
 
 /// Construct a new multiline [`Prompt`]
 #[inline]
-#[must_use]
 pub fn multiline<'a, E: Editor + Default>(prompt: &'a str, multiline: &'a str) -> Prompt<'a, E> {
     Prompt::multiline(prompt, multiline)
 }
 
 /// Construct a new [`Prompt`] with the given editor
 #[inline]
-#[must_use]
 pub fn with<E: Editor>(editor: E, prompt: &str) -> Prompt<E> {
     Prompt::with(editor, prompt)
 }
 
 /// Construct a new multiline [`Prompt`] with the given editor
 #[inline]
-#[must_use]
 pub fn with_multiline<'a, E>(editor: E, prompt: &'a str, multiline: &'a str) -> Prompt<'a, E>
 where
     E: Editor,
@@ -71,7 +67,6 @@ where
 
 /// Construct a new multiline [`Prompt`] with the [`Basic`] editor
 #[inline]
-#[must_use]
 pub fn simple(prompt: &str) -> Prompt<Basic> {
     Prompt::new(prompt)
 }

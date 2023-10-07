@@ -46,6 +46,7 @@ impl From<io::Error> for Error {
 /// The pomprt prompt
 ///
 /// See the [crate's documentation](crate) for more details
+#[must_use]
 pub struct Prompt<'a, E: Editor> {
     prompt: &'a str,
     multiline: &'a str,
@@ -59,7 +60,6 @@ pub struct Prompt<'a, E: Editor> {
 impl<'a, E: Editor> Prompt<'a, E> {
     /// Construct a new prompt
     #[inline]
-    #[must_use]
     pub fn new(prompt: &'a str) -> Self
     where
         E: Default,
@@ -69,7 +69,6 @@ impl<'a, E: Editor> Prompt<'a, E> {
 
     /// Construct a new multiline prompt
     #[inline]
-    #[must_use]
     pub fn multiline(prompt: &'a str, multiline: &'a str) -> Self
     where
         E: Default,
@@ -79,14 +78,12 @@ impl<'a, E: Editor> Prompt<'a, E> {
 
     /// Construct a new prompt with a given editor
     #[inline]
-    #[must_use]
     pub fn with(editor: E, prompt: &'a str) -> Self {
         Self::with_multiline(editor, prompt, "")
     }
 
     /// Construct a new multiline prompt with a given editor
     #[inline]
-    #[must_use]
     pub fn with_multiline(editor: E, prompt: &'a str, multiline: &'a str) -> Self {
         Self {
             prompt,
