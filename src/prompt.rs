@@ -270,26 +270,22 @@ impl<'a, E: Editor> Prompt<'a, E> {
             }
 
             let mut col = 0;
-            let line = self
-                .buf_lengths(&buffer[..cursor])
-                .inspect(|len| col = len % width + 1)
-                .map(|len| len / width + 1)
-                .sum::<usize>()
-                - 1;
+            let line = count_lines(
+                self.buf_lengths(&buffer[..cursor])
+                    .inspect(|len| col = len % width + 1),
+                width,
+            );
 
-            let rewind = if line > written {
+            if line > written {
                 write!(w, "{}", "\n".repeat(line - written))?;
-                line
             } else if line != written {
-                write!(w, "\x1b[{}E", written - line)?;
-                written - line
-            } else {
-                written
-            };
+                write!(w, "\x1b[{}F", written - line)?;
+            }
+
             write!(w, "\x1b[{col}G")?;
             w.flush()?;
-            if rewind != 0 {
-                write!(w, "\x1b[{rewind}F")?; // defer moving back cursor to next redraw
+            if line != 0 {
+                write!(w, "\x1b[{line}F")?; // defer moving back cursor to next redraw
             }
         }
     }
@@ -297,16 +293,13 @@ impl<'a, E: Editor> Prompt<'a, E> {
     fn display_buffer(&self, w: &mut BufStdout, buf: &str) -> io::Result<()> {
         write!(w, "\r\x1b[J")?;
 
-        let hl = &self.editor.highlight(buf);
+        let hl = self.editor.highlight(buf) + " ";
         let prompt = self.editor.highlight_prompt(self.prompt, false);
         let multiline = self.editor.highlight_prompt(self.multiline, true);
         let mut cur_prompt = &prompt;
         for line in hl.split_inclusive('\n') {
             write!(w, "{cur_prompt}\x1b[m{line}\x1b[m")?;
             cur_prompt = &multiline;
-        }
-        if hl.is_empty() || hl.ends_with('\n') {
-            write!(w, "{cur_prompt}\x1b[m")?;
         }
 
         Ok(())
@@ -375,13 +368,6 @@ fn set_tty() -> Option<tty::Params> {
     })
 }
 
-fn count_lines<I>(lengths: I, width: usize) -> usize
-where
-    I: IntoIterator<Item = usize>,
-{
-    lengths
-        .into_iter()
-        .map(|x| x.saturating_sub(1) / width + 1)
-        .sum::<usize>()
-        - 1
+fn count_lines(lengths: impl Iterator<Item = usize>, width: usize) -> usize {
+    lengths.map(|x| x / width + 1).sum::<usize>() - 1
 }
