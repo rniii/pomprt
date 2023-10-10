@@ -6,7 +6,7 @@
 
 use std::io::{self, Write};
 
-use crate::{ansi::AnsiStdin, tty, Editor, Event};
+use crate::{ansi::AnsiStdin, tty, Completion, Editor, Event};
 
 type BufStdout<'a> = io::BufWriter<io::StdoutLock<'a>>;
 
@@ -41,6 +41,13 @@ impl From<io::Error> for Error {
     fn from(value: io::Error) -> Self {
         Self::Io(value)
     }
+}
+
+struct CompletionState {
+    results: Vec<String>,
+    current: usize,
+    range: (usize, usize),
+    buffer: String,
 }
 
 /// The pomprt prompt
@@ -132,11 +139,13 @@ impl<'a, E: Editor> Prompt<'a, E> {
         let mut history_entry = self.history.len();
         let mut saved_entry = String::new();
         let mut cursor = 0;
+        let mut completion = None;
 
         write!(w, "{}", self.editor.highlight_prompt(self.prompt, false))?;
         w.flush()?;
 
         loop {
+            let cur_completion = completion.take();
             let width = tty::get_width().ok_or(Error::DumbTerminal)?;
             let mut written = 0;
             match self.editor.read_key(&mut r)? {
@@ -163,6 +172,37 @@ impl<'a, E: Editor> Prompt<'a, E> {
                         break;
                     }
                 },
+                Event::Tab => {
+                    completion = cur_completion.or_else(|| {
+                        self.editor.complete(&buffer, cursor).map(
+                            |Completion(start, end, results)| CompletionState {
+                                results,
+                                current: 0,
+                                range: (start, end),
+                                buffer: buffer.clone(),
+                            },
+                        )
+                    });
+
+                    match completion.as_mut() {
+                        Some(c) if c.results.is_empty() => continue,
+                        // automatically submit if only one entry is present
+                        Some(c) if c.results.len() == 1 => {
+                            buffer.replace_range(c.range.0..c.range.1, &c.results[0]);
+                            cursor = c.range.0 + c.results[0].len();
+                            completion = None;
+                        }
+                        Some(c) => {
+                            buffer = c.buffer.clone();
+                            buffer.replace_range(c.range.0..c.range.1, &c.results[c.current]);
+                            cursor = c.range.0 + c.results[c.current].len();
+                            c.current = (c.current + 1) % c.results.len();
+                        }
+                        None => self.editor.indent(&mut buffer, &mut cursor),
+                    }
+
+                    written += self.redraw(&mut w, &buffer, width)?;
+                }
                 Event::Left if cursor > 0 => loop {
                     cursor -= 1;
                     if buffer.is_char_boundary(cursor) {

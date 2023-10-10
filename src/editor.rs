@@ -8,6 +8,9 @@ use std::io;
 
 use crate::ansi::{Ansi, AnsiStdin};
 
+/// Completion result returned by [`Editor::complete`]
+pub struct Completion(pub usize, pub usize, pub Vec<String>);
+
 /// Edit event emitted by [`Editor::read_key`] to [`crate::Prompt`]
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum Event {
@@ -19,6 +22,8 @@ pub enum Event {
     Enter,
     /// Removes the character behind the cursor
     Backspace,
+    /// Indents or completes the word under the cursor depending on [`Editor::complete`]
+    Tab,
     /// Moves back the cursor
     Left,
     /// Moves forward the cursor
@@ -55,6 +60,7 @@ pub trait Editor {
                 Ansi::Esc(b'\r') => Event::Insert('\n'),
                 Ansi::Control(b'M') => Event::Enter,
                 Ansi::Control(b'?' | b'H') => Event::Backspace,
+                Ansi::Control(b'I') => Event::Tab,
                 Ansi::Control(b'B') | Ansi::Csi([b'D']) => Event::Left,
                 Ansi::Control(b'F') | Ansi::Csi([b'C']) => Event::Right,
                 Ansi::Control(b'A') | Ansi::Csi([b'H']) => Event::Home,
@@ -72,9 +78,29 @@ pub trait Editor {
     }
 
     /// Inserts a character at the current cursor position, moving it forward
+    ///
+    /// Note that `cursor` should always lie inside a char boundary. This can usually be achieved
+    /// by adding [`char::len_utf8`] to it, instead of adding just `1` to move it forward.
     fn insert(&self, buffer: &mut String, cursor: &mut usize, c: char) {
         buffer.insert(*cursor, c);
         *cursor += c.len_utf8();
+    }
+
+    /// Provides completion if available
+    ///
+    /// Returning [`Some`] will cause [`Event::Tab`] to cycle through all results in the [`Vec`],
+    /// replacing `buffer[start..end]` until another key is pressed. Otherwise, [`Editor::indent`]
+    /// is called.
+    fn complete(&self, buffer: &str, cursor: usize) -> Option<Completion> {
+        let _ = buffer;
+        let _ = cursor;
+        None
+    }
+
+    /// Inserts indentation at the current cursor position when [`Editor::complete`] returns none
+    fn indent(&self, buffer: &mut String, cursor: &mut usize) {
+        buffer.insert_str(*cursor, "  ");
+        *cursor += 2;
     }
 
     /// Highlights the current input by adding [ANSI color](SGR) sequences

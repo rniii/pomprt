@@ -31,7 +31,7 @@ mod prompt;
 mod tty;
 
 pub use crate::{
-    editor::{Basic, Editor, Event},
+    editor::{Basic, Editor, Event, Completion},
     prompt::{
         Error::{self, Eof, Interrupt},
         Prompt,
