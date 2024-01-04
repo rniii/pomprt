@@ -158,7 +158,9 @@ impl<'a, E: Editor> Prompt<'a, E> {
                     written += self.redraw(&mut w, &buffer, width)?;
                 }
                 Event::Enter => {
-                    self.history.push(buffer.clone());
+                    if !self.history.last().is_some_and(|e| e.eq(&buffer)) {
+                        self.history.push(buffer.clone());
+                    }
                     self.display_buffer(&mut w, &buffer)?;
                     writeln!(w)?;
                     w.flush()?;
