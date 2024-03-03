@@ -1,12 +1,12 @@
 // pomprt, a line editor prompt library
 // Copyright (c) 2023 rini
 //
-// pomprt is distributed under the Apache License version 2.0, as per COPYING
 // SPDX-License-Identifier: Apache-2.0
 
-use std::io::{self, Write};
+use std::io::{self, IsTerminal, Write};
 
-use crate::{ansi::AnsiStdin, tty, Completion, Editor, Event};
+use crate::Basic;
+use crate::{ansi::AnsiStdin, Completion, Editor, Event};
 
 type BufStdout<'a> = io::BufWriter<io::StdoutLock<'a>>;
 
@@ -18,8 +18,6 @@ pub enum Error {
     Eof,
     /// Interrupt signal (ctrl-c)
     Interrupt,
-    /// Tried to query something about the terminal, but failed
-    DumbTerminal,
     /// Error ocurred during read/write
     Io(io::Error),
 }
@@ -31,7 +29,6 @@ impl std::fmt::Display for Error {
         match self {
             Self::Eof => write!(f, "eof reached"),
             Self::Interrupt => write!(f, "interrupt"),
-            Self::DumbTerminal => write!(f, "terminal is too dumb"),
             Self::Io(e) => write!(f, "{e}"),
         }
     }
@@ -44,58 +41,45 @@ impl From<io::Error> for Error {
 }
 
 struct CompletionState {
+    range: std::ops::Range<usize>,
     results: Vec<String>,
     current: usize,
-    range: (usize, usize),
     buffer: String,
 }
 
 /// The pomprt prompt
 ///
 /// See the [crate's documentation](crate) for more details
-#[must_use]
-pub struct Prompt<'a, E: Editor> {
+pub struct Prompt<'a, E: Editor = Basic> {
     prompt: &'a str,
     multiline: &'a str,
-    prev_tty: Option<tty::Params>,
     /// The current [Editor]
     pub editor: E,
     /// Input history. Entries are added automatically by [`Prompt::read`]
     pub history: Vec<String>,
 }
 
-impl<'a, E: Editor> Prompt<'a, E> {
+impl<'a> Prompt<'a> {
     /// Construct a new prompt
-    #[inline]
-    pub fn new(prompt: &'a str) -> Self
-    where
-        E: Default,
-    {
-        Self::with(E::default(), prompt)
+    #[must_use]
+    pub fn new(prompt: &'a str) -> Self {
+        Self::with(Basic, prompt)
     }
+}
 
-    /// Construct a new multiline prompt
-    #[inline]
-    pub fn multiline(prompt: &'a str, multiline: &'a str) -> Self
-    where
-        E: Default,
-    {
-        Self::with_multiline(E::default(), prompt, multiline)
-    }
-
+impl<'a, E: Editor> Prompt<'a, E> {
     /// Construct a new prompt with a given editor
-    #[inline]
+    #[must_use]
     pub fn with(editor: E, prompt: &'a str) -> Self {
         Self::with_multiline(editor, prompt, "")
     }
 
     /// Construct a new multiline prompt with a given editor
-    #[inline]
+    #[must_use]
     pub fn with_multiline(editor: E, prompt: &'a str, multiline: &'a str) -> Self {
         Self {
             prompt,
             multiline,
-            prev_tty: set_tty(),
             editor,
             history: Vec::with_capacity(64),
         }
@@ -125,14 +109,14 @@ impl<'a, E: Editor> Prompt<'a, E> {
     pub fn read(&mut self) -> Result<String, Error> {
         let mut buffer = String::with_capacity(128);
 
-        // termios failed -- the output is likely not a terminal, so don't do any fancy stuff
-        if self.prev_tty.is_none() {
+        if !io::stdin().is_terminal() {
             if io::stdin().read_line(&mut buffer)? == 0 {
                 return Err(Error::Eof);
             }
             return Ok(buffer);
         }
 
+        let _raw = RawMode::acquire();
         let mut r = AnsiStdin::new(io::stdin().lock());
         let mut w = BufStdout::new(io::stdout().lock());
 
@@ -146,9 +130,9 @@ impl<'a, E: Editor> Prompt<'a, E> {
 
         loop {
             let cur_completion = completion.take();
-            let width = tty::get_width().ok_or(Error::DumbTerminal)?;
+            let width = rawrrr::get_size().map_or(80, |(w, _)| w);
             let mut written = 0;
-            match self.editor.read_key(&mut r)? {
+            match self.editor.next_event(&mut r)? {
                 Event::Insert(c) => {
                     self.editor.insert(&mut buffer, &mut cursor, c);
                     written += self.redraw(&mut w, &buffer, width)?;
@@ -176,28 +160,28 @@ impl<'a, E: Editor> Prompt<'a, E> {
                 },
                 Event::Tab => {
                     completion = cur_completion.or_else(|| {
-                        self.editor.complete(&buffer, cursor).map(
-                            |Completion(start, end, results)| CompletionState {
+                        self.editor
+                            .complete(&buffer, cursor)
+                            .map(|Completion(range, results)| CompletionState {
+                                range,
                                 results,
                                 current: 0,
-                                range: (start, end),
                                 buffer: buffer.clone(),
-                            },
-                        )
+                            })
                     });
 
                     match completion.as_mut() {
                         Some(c) if c.results.is_empty() => continue,
                         // automatically submit if only one entry is present
                         Some(c) if c.results.len() == 1 => {
-                            buffer.replace_range(c.range.0..c.range.1, &c.results[0]);
-                            cursor = c.range.0 + c.results[0].len();
+                            buffer.replace_range(c.range.clone(), &c.results[0]);
+                            cursor = c.range.start + c.results[0].len();
                             completion = None;
                         }
                         Some(c) => {
                             buffer = c.buffer.clone();
-                            buffer.replace_range(c.range.0..c.range.1, &c.results[c.current]);
-                            cursor = c.range.0 + c.results[c.current].len();
+                            buffer.replace_range(c.range.clone(), &c.results[c.current]);
+                            cursor = c.range.start + c.results[c.current].len();
                             c.current = (c.current + 1) % c.results.len();
                         }
                         None => self.editor.indent(&mut buffer, &mut cursor),
@@ -242,7 +226,7 @@ impl<'a, E: Editor> Prompt<'a, E> {
                     // SIGTSTP is what usually happens -- the process gets put in the background
                     libc::kill(std::process::id() as i32, libc::SIGTSTP);
                     // once we're back, we need to put the tty in raw mode again
-                    tty::set_params(tty::make_raw(self.prev_tty.unwrap()));
+                    rawrrr::enable_raw();
                     written += self.redraw(&mut w, &buffer, width)?;
                 },
                 Event::Up if history_entry > 0 => {
@@ -330,46 +314,34 @@ impl<'a, E: Editor> Prompt<'a, E> {
     }
 }
 
-/// Resets the terminal mode back to it's previous state
-impl<E: Editor> Drop for Prompt<'_, E> {
-    fn drop(&mut self) {
-        if let Some(tty) = self.prev_tty {
-            tty::set_params(tty);
-        }
-    }
-}
-
 /// Iterates through [`Prompt::read`], until either [`Error::Eof`] or [`Error::Interrupt`] is reached
 impl<E: Editor> Iterator for Prompt<'_, E> {
-    type Item = Result<String, Error>;
+    type Item = String;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.read() {
             Err(Error::Eof | Error::Interrupt) => None,
-            r => Some(r),
+            r => Some(r.unwrap()),
         }
     }
 }
 
-fn set_tty() -> Option<tty::Params> {
-    tty::get_params().map(|tty| {
-        tty::set_params(tty::make_raw(tty));
-
-        // for users compiling with panic = "abort", `Prompt` will not be dropped
-        // we restore the terminal in here instead
-        #[cfg(panic = "abort")]
-        {
-            let hook = std::panic::take_hook();
-            std::panic::set_hook(Box::new(move |info| {
-                tty::set_params(tty);
-                hook(info);
-            }));
-        }
-
-        tty
-    })
-}
-
 fn count_lines(lengths: impl Iterator<Item = usize>, width: usize) -> usize {
     lengths.map(|x| x / width + 1).sum::<usize>() - 1
+}
+
+struct RawMode;
+
+impl RawMode {
+    fn acquire() -> Self {
+        rawrrr::enable_raw();
+
+        Self
+    }
+}
+
+impl Drop for RawMode {
+    fn drop(&mut self) {
+        rawrrr::disable_raw();
+    }
 }

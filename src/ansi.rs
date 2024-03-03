@@ -1,7 +1,6 @@
 // pomprt, a line editor prompt library
 // Copyright (c) 2023 rini
 //
-// pomprt is distributed under the Apache License version 2.0, as per COPYING
 // SPDX-License-Identifier: Apache-2.0
 
 //! Helper module for reading and parsing ANSI sequences
@@ -55,7 +54,7 @@ impl<R: Read> AnsiReader<R> {
     /// Reads a single [Ansi] sequence from input
     pub fn read_sequence(&mut self) -> std::io::Result<Ansi> {
         self.buffer.clear();
-        let ansi = match self.read_byte()? {
+        Ok(match self.read_byte()? {
             b @ 0x80.. => {
                 // https://en.wikipedia.org/wiki/UTF-8#Encoding_process
                 let size = match b {
@@ -84,7 +83,6 @@ impl<R: Read> AnsiReader<R> {
             // *technically,* DEL isn't C0, but we include it here
             c @ (..=0x1f | DEL) => Ansi::Control(c ^ 0x40),
             c => Ansi::Char(char::from(c)),
-        };
-        Ok(ansi)
+        })
     }
 }

@@ -20,7 +20,7 @@ impl pomprt::Editor for Rainbow {
 }
 
 fn main() {
-    let mut pom = pomprt::new::<Rainbow>("><> ");
+    let mut pom = pomprt::with(Rainbow, "><> ");
 
     loop {
         match pom.read() {

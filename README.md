@@ -11,9 +11,9 @@ A tiny and extensible readline implementation built from scratch
 - actually tiny: ~500 SLoC, only depends on `libc` or `winapi`
 
 ```rust
-let mut pom = pomprt::simple("><> ");
+let mut cmd = pomprt::new("><> ");
 loop {
-    match pom.read() {
+    match cmd.read() {
         Ok(input) => println!("{input}"),
         Err(pomprt::Eof) => return println!("ctrl-d"),
         Err(pomprt::Interrupt) => return println!("ctrl-c"),

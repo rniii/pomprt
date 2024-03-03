@@ -12,7 +12,9 @@ struct MiniShell;
 impl pomprt::Editor for MiniShell {
     fn complete(&self, buffer: &str, cursor: usize) -> Option<pomprt::Completion> {
         let mut start = buffer[..cursor].rfind(' ').map_or(0, |c| c + 1);
-        let end = buffer[cursor..].find(' ').map_or(buffer.len(), |c| cursor + c);
+        let end = buffer[cursor..]
+            .find(' ')
+            .map_or(buffer.len(), |c| cursor + c);
         let word = &buffer[start..end];
 
         let results = match buffer[..start].find(|c| c != ' ') {
@@ -26,7 +28,7 @@ impl pomprt::Editor for MiniShell {
             None => complete_file("/usr/bin", word),
         };
 
-        Some(pomprt::Completion(start, end, results))
+        Some(pomprt::Completion(start..end, results))
     }
 }
 
@@ -45,7 +47,7 @@ fn complete_file(dir: &str, prefix: &str) -> Vec<String> {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut sh = pomprt::new::<MiniShell>("% ");
+    let mut sh = pomprt::with(MiniShell, "% ");
 
     loop {
         let ok = match sh.read() {

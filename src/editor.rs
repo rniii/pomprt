@@ -1,7 +1,6 @@
 // pomprt, a line editor prompt library
 // Copyright (c) 2023 rini
 //
-// pomprt is distributed under the Apache License version 2.0, as per COPYING
 // SPDX-License-Identifier: Apache-2.0
 
 use std::io;
@@ -9,7 +8,7 @@ use std::io;
 use crate::ansi::{Ansi, AnsiStdin};
 
 /// Completion result returned by [`Editor::complete`]
-pub struct Completion(pub usize, pub usize, pub Vec<String>);
+pub struct Completion(pub std::ops::Range<usize>, pub Vec<String>);
 
 /// Edit event emitted by [`Editor::read_key`] to [`crate::Prompt`]
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
@@ -50,10 +49,10 @@ pub enum Event {
 /// implementing [`Editor::highlight`]. Detailed examples can be found in the [`examples`]
 /// directory.
 ///
-/// [`examples`]: https://codeberg.org/twink/pomprt/src/branch/main/examples
+/// [`examples`]: https://codeberg.org/rini/pomprt/src/branch/main/examples
 pub trait Editor {
     /// Reads ANSI sequences from input and returns an editor event
-    fn read_key(&mut self, input: &mut AnsiStdin) -> io::Result<Event> {
+    fn next_event(&mut self, input: &mut AnsiStdin) -> io::Result<Event> {
         loop {
             let event = match input.read_sequence()? {
                 Ansi::Char(c) => Event::Insert(c),

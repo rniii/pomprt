@@ -35,7 +35,7 @@ impl pomprt::Editor for LispEditor {
 }
 
 fn main() {
-    for line in pomprt::multiline::<LispEditor>(">> ", ".. ") {
-        line.unwrap();
+    for line in pomprt::with_multiline(LispEditor, ">> ", ".. ") {
+        println!("{line}");
     }
 }
