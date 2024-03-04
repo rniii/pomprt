@@ -62,7 +62,7 @@ pub struct Prompt<'a, E: Editor = Basic> {
 impl<'a> Prompt<'a> {
     /// Construct a new prompt
     #[must_use]
-    pub fn new(prompt: &'a str) -> Self {
+    pub const fn new(prompt: &'a str) -> Self {
         Self::with(Basic, prompt)
     }
 }
@@ -70,18 +70,18 @@ impl<'a> Prompt<'a> {
 impl<'a, E: Editor> Prompt<'a, E> {
     /// Construct a new prompt with a given editor
     #[must_use]
-    pub fn with(editor: E, prompt: &'a str) -> Self {
+    pub const fn with(editor: E, prompt: &'a str) -> Self {
         Self::with_multiline(editor, prompt, "")
     }
 
     /// Construct a new multiline prompt with a given editor
     #[must_use]
-    pub fn with_multiline(editor: E, prompt: &'a str, multiline: &'a str) -> Self {
+    pub const fn with_multiline(editor: E, prompt: &'a str, multiline: &'a str) -> Self {
         Self {
             prompt,
             multiline,
             editor,
-            history: Vec::with_capacity(64),
+            history: Vec::new(),
         }
     }
 

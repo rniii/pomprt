@@ -57,19 +57,19 @@ pub use prompt::{Error, Error::Eof, Error::Interrupt, Prompt};
 
 /// Construct a new [`Prompt`]
 #[must_use]
-pub fn new(prompt: &str) -> Prompt {
+pub const fn new(prompt: &str) -> Prompt {
     Prompt::new(prompt)
 }
 
 /// Construct a new [`Prompt`] with the given editor
 #[must_use]
-pub fn with<E: Editor>(editor: E, prompt: &str) -> Prompt<E> {
+pub const fn with<E: Editor>(editor: E, prompt: &str) -> Prompt<E> {
     Prompt::with(editor, prompt)
 }
 
 /// Construct a new multiline [`Prompt`] with the given editor
 #[must_use]
-pub fn with_multiline<'a, E>(editor: E, prompt: &'a str, multiline: &'a str) -> Prompt<'a, E>
+pub const fn with_multiline<'a, E>(editor: E, prompt: &'a str, multiline: &'a str) -> Prompt<'a, E>
 where
     E: Editor,
 {
