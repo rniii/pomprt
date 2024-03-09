@@ -5,8 +5,8 @@
 
 use std::io::{self, IsTerminal, Write};
 
-use crate::Basic;
-use crate::{ansi::AnsiStdin, Completion, Editor, Event};
+use crate::{ansi, Basic};
+use crate::{Completion, Editor, Event};
 
 type BufStdout<'a> = io::BufWriter<io::StdoutLock<'a>>;
 
@@ -54,7 +54,7 @@ struct CompletionState {
 pub struct Prompt<'a, E: Editor = Basic> {
     prompt: &'a str,
     multiline: &'a str,
-    /// The current [Editor]
+    /// The current [editor][Editor]
     pub editor: E,
     /// Input history. Entries are added automatically by [`Prompt::read`]
     pub history: Vec<String>,
@@ -110,7 +110,7 @@ impl<'a, E: Editor> Prompt<'a, E> {
         }
 
         let _raw = RawMode::acquire();
-        let mut r = AnsiStdin::new(io::stdin().lock());
+        let mut r = ansi::Reader::new(io::stdin().lock());
         let mut w = BufStdout::new(io::stdout().lock());
 
         let mut history_entry = self.history.len();
@@ -196,10 +196,15 @@ impl<'a, E: Editor> Prompt<'a, E> {
                 },
                 Event::Home => cursor = 0,
                 Event::End => cursor = buffer.len(),
-                Event::Interrupt | Event::Eof if buffer.is_empty() => {
+                Event::Interrupt if buffer.is_empty() => {
                     self.display_buffer(&mut w, &buffer)?;
                     writeln!(w)?;
                     return Err(Error::Interrupt);
+                }
+                Event::Eof if buffer.is_empty() => {
+                    self.display_buffer(&mut w, &buffer)?;
+                    writeln!(w)?;
+                    return Err(Error::Eof);
                 }
                 Event::Interrupt => {
                     self.display_buffer(&mut w, &buffer)?;
@@ -265,20 +270,23 @@ impl<'a, E: Editor> Prompt<'a, E> {
             let mut col = 0;
             let line = count_lines(
                 self.buf_lengths(&buffer[..cursor])
-                    .inspect(|len| col = len % width + 1),
+                    .inspect(|len| col = len % width),
                 width,
             );
 
             if line > written {
                 write!(w, "{}", "\n".repeat(line - written))?;
             } else if line != written {
-                write!(w, "\x1b[{}F", written - line)?;
+                write!(w, "\x1b[{}A", written - line)?;
             }
 
-            write!(w, "\x1b[{col}G")?;
+            write!(w, "\r")?;
+            if col != 0 {
+                write!(w, "\x1b[{col}C")?;
+            }
             w.flush()?;
             if line != 0 {
-                write!(w, "\x1b[{line}F")?; // defer moving back cursor to next redraw
+                write!(w, "\x1b[{line}A")?; // defer moving back cursor to next redraw
             }
         }
     }
@@ -321,7 +329,8 @@ impl<'a, E: Editor> Prompt<'a, E> {
     }
 }
 
-/// Iterates through [`Prompt::read`], until either [`Error::Eof`] or [`Error::Interrupt`] is reached
+/// Iterates through [`Prompt::read`], until either [`Error::Eof`] or [`Error::Interrupt`] is
+/// reached. Panics on I/O errors.
 impl<E: Editor> Iterator for Prompt<'_, E> {
     type Item = String;
 

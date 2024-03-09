@@ -5,7 +5,7 @@
 
 use std::io;
 
-use crate::ansi::{Ansi, AnsiStdin};
+use crate::ansi::{Ansi, Reader};
 
 /// Completion result returned by [`Editor::complete`]
 pub struct Completion(
@@ -36,9 +36,9 @@ pub enum Event {
     Home,
     /// Moves the cursor to the end of the input
     End,
-    /// Returns [`crate::Error::Interrupt`] if the buffer is empty, or clears the buffer
+    /// Returns [`Interrupt`][crate::Error::Interrupt] if the buffer is empty, or clears the buffer
     Interrupt,
-    /// Returns [`crate::Error::Eof`] if the buffer is empty
+    /// Returns [`Eof`][crate::Error::Eof] if the buffer is empty
     Eof,
     /// Suspends the program (Unix only)
     Suspend,
@@ -54,7 +54,7 @@ pub enum Event {
     RightWord,
 }
 
-/// Custom editor behaviour for a [`crate::Prompt`]
+/// Custom editor behaviour for a [`Prompt`][crate::Prompt]
 ///
 /// All functions provided may be overrided with custom ones. For instance, colors may be added by
 /// implementing [`Editor::highlight`]. Detailed examples can be found in the [`examples`]
@@ -63,7 +63,7 @@ pub enum Event {
 /// [`examples`]: https://codeberg.org/rini/pomprt/src/branch/main/examples
 pub trait Editor {
     /// Reads ANSI sequences from input and returns an editor event
-    fn next_event(&mut self, input: &mut AnsiStdin) -> io::Result<Event> {
+    fn next_event(&mut self, input: &mut Reader<impl io::Read>) -> io::Result<Event> {
         loop {
             let event = match input.read_sequence()? {
                 Ansi::Char(c) => Event::Insert(c),

@@ -1,23 +1,16 @@
 [package]
 name = "pomprt"
-version = "0.5.2"
+version = "0.5.3"
 authors = ["rini <rini@rinici.de>"]
 edition = "2021"
-description = "A tiny readline implementation built from scratch"
+description = "A small yet feature-rich readline prompt"
 repository = "https://codeberg.org/rini/pomprt"
 license = "Apache-2.0"
+keywords = ["readline", "prompt"]
+categories = ["command-line-interface"]
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2.147"
-
-[target.'cfg(windows)'.dependencies]
-winapi.version = "0.3.9"
-winapi.features = [
-    "consoleapi",
-    "handleapi",
-    "processenv",
-    "winbase",
-]
 
 [dependencies]
 rawrrr = "0.2.1"

@@ -5,7 +5,7 @@
 
 //! Helper module for reading and parsing ANSI sequences
 
-use std::io::{Read, StdinLock};
+use std::io::{self, Read};
 
 /// A single ANSI sequence, usually corresponding to a single keypress
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -26,15 +26,12 @@ const ESC: u8 = b'[' ^ 0x40;
 const DEL: u8 = b'?' ^ 0x40;
 
 /// A wrapper around a reader that can read ANSI sequences one-by-one
-pub struct AnsiReader<R: Read> {
+pub struct Reader<R: Read> {
     input: R,
     buffer: Vec<u8>,
 }
 
-/// ANSI reader on standard input
-pub type AnsiStdin<'a> = AnsiReader<StdinLock<'a>>;
-
-impl<R: Read> AnsiReader<R> {
+impl<R: Read> Reader<R> {
     /// Creates a new ANSI reader for the given input
     pub fn new(input: R) -> Self {
         Self {
@@ -44,7 +41,7 @@ impl<R: Read> AnsiReader<R> {
     }
 
     #[inline]
-    fn read_byte(&mut self) -> std::io::Result<u8> {
+    fn read_byte(&mut self) -> io::Result<u8> {
         let p = self.buffer.len();
         self.buffer.push(0);
         self.input.read_exact(&mut self.buffer[p..=p])?;
@@ -52,7 +49,7 @@ impl<R: Read> AnsiReader<R> {
     }
 
     /// Reads a single [Ansi] sequence from input
-    pub fn read_sequence(&mut self) -> std::io::Result<Ansi> {
+    pub fn read_sequence(&mut self) -> io::Result<Ansi> {
         self.buffer.clear();
         Ok(match self.read_byte()? {
             b @ 0x80.. => {

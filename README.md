@@ -1,24 +1,21 @@
-# pomprt
+# Pomprt
+
+[![crates.io](https://img.shields.io/crates/v/pomprt)](https://crates.io/crates/pomprt)
+[![docs.rs](https://img.shields.io/docsrs/pomprt)](https://docs.rs/pomprt)
 
 A tiny and extensible readline implementation built from scratch
 
-- supports most familiar keybinds
-- multiline editing, proper line wrapping and Unicode supported
-- hints and highlighting as you type
-- simple completion api
-- automatic history
-- well supported: any terminal you can think of nowadays probably Just Works
-- actually tiny: ~500 SLoC, only depends on `libc` or `winapi`
+Pomprt is a small yet feature-rich multi-line editor that supports syntax highlighting, hints and completion.
+
+- UTF-8 support
+- Line history
+- Familiar keybinds: most of readline implemented
+- Highly compatible: only simple VT100 sequences are used, which should be supported by most terminals
+- Small footprint: ~580 sloc, only depending on `libc`/`winapi`
 
 ```rust
-let mut cmd = pomprt::new("><> ");
-loop {
-    match cmd.read() {
-        Ok(input) => println!("{input}"),
-        Err(pomprt::Eof) => return println!("ctrl-d"),
-        Err(pomprt::Interrupt) => return println!("ctrl-c"),
-        Err(e) => return eprintln!("error: {e}"),
-    }
+for input in pomprt::new(">> ") {
+    println!("{input}");
 }
 ```
 

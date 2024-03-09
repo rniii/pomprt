@@ -5,26 +5,28 @@
 
 //! A tiny and extensible readline implementation built from scratch
 //!
-//! pomprt is a multi-line editor with support for things like syntax highlighting, hints and
-//! completion
+//! Pomprt is a multi-line editor with support for things like syntax highlighting, hints and
+//! completion.
 //!
-//! # Examples
+//! ## Usage
 //!
-//! A simple line editor prompt with no extra features:
+//! For starters, you can create a prompt with [`prompt::new`][new], and read input via
+//! [`Prompt::read`], or by iterating through it:
 //!
 //! ```
-//! for input in pomprt::new("><> ") {
+//! for input in pomprt::new(">> ") {
 //!     println!("{input}");
 //! }
 //! ```
 //!
-//! Features can be added by implementing `Editor`:
+//! ### Custom editors
+//!
+//! For more complex applications, extra features can be added by implementing an [`Editor`]:
 //!
 //! ```
-//! struct MyEditor;
-//!
+//! # struct MyEditor;
 //! impl pomprt::Editor for MyEditor {
-//!     // make the prompt cyan
+//!     // Make the prompt cyan
 //!     fn highlight_prompt(&self, prompt: &str, _multiline: bool) -> String {
 //!         format!("\x1b[36m{prompt}")
 //!     }
@@ -34,7 +36,7 @@
 //! // ...
 //! ```
 //!
-//! More complete examples can be found in the [`examples`] folder
+//! That's it! More complete examples can be found in the [`examples`] folder.
 //!
 //! [`examples`]: https://codeberg.org/rini/pomprt/src/branch/main/examples
 
@@ -45,20 +47,21 @@ mod editor;
 mod prompt;
 
 pub use editor::{Basic, Completion, Editor, Event};
-#[doc(inline)]
-pub use prompt::{Error, Error::Eof, Error::Interrupt, Prompt};
+pub use prompt::{Error, Prompt};
 
-/// Construct a new [`Prompt`]
+pub use Error::{Eof, Interrupt};
+
+/// Construct a new [`Prompt`] with the default editor
 pub const fn new(prompt: &str) -> Prompt {
     Prompt::new(prompt)
 }
 
-/// Construct a new [`Prompt`] with the given editor
+/// Construct a new [`Prompt`] with a custom editor
 pub const fn with<E: Editor>(editor: E, prompt: &str) -> Prompt<E> {
     Prompt::with(editor, prompt)
 }
 
-/// Construct a new multiline [`Prompt`] with the given editor
+/// Construct a new [`Prompt`] with a custom editor and multiline prompt
 pub const fn with_multiline<'a, E>(editor: E, prompt: &'a str, multiline: &'a str) -> Prompt<'a, E>
 where
     E: Editor,

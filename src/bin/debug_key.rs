@@ -1,7 +1,7 @@
-use pomprt::ansi::{Ansi, AnsiStdin};
+use pomprt::ansi::{Ansi, Reader};
 
 fn main() -> Result<(), pomprt::Error> {
-    let mut r = AnsiStdin::new(std::io::stdin().lock());
+    let mut r = Reader::new(std::io::stdin().lock());
     rawrrr::enable_raw();
 
     loop {
