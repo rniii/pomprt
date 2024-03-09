@@ -259,7 +259,7 @@ impl<'a, E: Editor> Prompt<'a, E> {
                 Event::LeftWord => {
                     while cursor > 0 {
                         cursor -= 1;
-                        if !buffer[..cursor].ends_with(E::is_word) {
+                        if !buffer[..cursor].ends_with(E::is_keyword) {
                             break;
                         }
                     }
@@ -267,7 +267,7 @@ impl<'a, E: Editor> Prompt<'a, E> {
                 Event::RightWord => {
                     while cursor < buffer.len() {
                         cursor += 1;
-                        if !buffer[cursor..].starts_with(E::is_word) {
+                        if !buffer[cursor..].starts_with(E::is_keyword) {
                             break;
                         }
                     }
