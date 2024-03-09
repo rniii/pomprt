@@ -13,21 +13,14 @@
 //! A simple line editor prompt with no extra features:
 //!
 //! ```
-//! let mut cmd = pomprt::new("><> ");
-//! loop {
-//!     match cmd.read() {
-//!         Ok(input) => println!("{input}"),
-//!         Err(pomprt::Eof) => return println!("ctrl-d"),
-//!         Err(pomprt::Interrupt) => return println!("ctrl-c"),
-//!         Err(e) => return println!("error: {e}"),
-//!     }
+//! for input in pomprt::new("><> ") {
+//!     println!("{input}");
 //! }
 //! ```
 //!
 //! Features can be added by implementing `Editor`:
 //!
 //! ```
-//! #[derive(Default)]
 //! struct MyEditor;
 //!
 //! impl pomprt::Editor for MyEditor {
@@ -45,7 +38,6 @@
 //!
 //! [`examples`]: https://codeberg.org/rini/pomprt/src/branch/main/examples
 
-#![deny(unsafe_code)]
 #![warn(missing_docs, clippy::doc_markdown)]
 
 pub mod ansi;
@@ -56,19 +48,16 @@ pub use editor::{Basic, Completion, Editor, Event};
 pub use prompt::{Error, Error::Eof, Error::Interrupt, Prompt};
 
 /// Construct a new [`Prompt`]
-#[must_use]
 pub const fn new(prompt: &str) -> Prompt {
     Prompt::new(prompt)
 }
 
 /// Construct a new [`Prompt`] with the given editor
-#[must_use]
 pub const fn with<E: Editor>(editor: E, prompt: &str) -> Prompt<E> {
     Prompt::with(editor, prompt)
 }
 
 /// Construct a new multiline [`Prompt`] with the given editor
-#[must_use]
 pub const fn with_multiline<'a, E>(editor: E, prompt: &'a str, multiline: &'a str) -> Prompt<'a, E>
 where
     E: Editor,

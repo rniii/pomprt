@@ -1,12 +1,10 @@
 // pomprt, a line editor prompt library
 // Copyright (c) 2023 rini
 //
-// pomprt is distributed under the Apache License version 2.0, as per COPYING
 // SPDX-License-Identifier: Apache-2.0
 
 use std::process::Command;
 
-#[derive(Default)]
 struct MiniShell;
 
 impl pomprt::Editor for MiniShell {

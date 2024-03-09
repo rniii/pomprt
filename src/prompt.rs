@@ -50,6 +50,7 @@ struct CompletionState {
 /// The pomprt prompt
 ///
 /// See the [crate's documentation](crate) for more details
+#[must_use]
 pub struct Prompt<'a, E: Editor = Basic> {
     prompt: &'a str,
     multiline: &'a str,
@@ -61,7 +62,6 @@ pub struct Prompt<'a, E: Editor = Basic> {
 
 impl<'a> Prompt<'a> {
     /// Construct a new prompt
-    #[must_use]
     pub const fn new(prompt: &'a str) -> Self {
         Self::with(Basic, prompt)
     }
@@ -69,13 +69,11 @@ impl<'a> Prompt<'a> {
 
 impl<'a, E: Editor> Prompt<'a, E> {
     /// Construct a new prompt with a given editor
-    #[must_use]
     pub const fn with(editor: E, prompt: &'a str) -> Self {
         Self::with_multiline(editor, prompt, "")
     }
 
     /// Construct a new multiline prompt with a given editor
-    #[must_use]
     pub const fn with_multiline(editor: E, prompt: &'a str, multiline: &'a str) -> Self {
         Self {
             prompt,
@@ -93,11 +91,6 @@ impl<'a, E: Editor> Prompt<'a, E> {
     /// Set the current multiline prompt
     pub fn set_multiline(&mut self, prompt: &'a str) {
         self.multiline = prompt;
-    }
-
-    /// Set the current editor
-    pub fn set_editor(&mut self, editor: E) {
-        self.editor = editor;
     }
 
     /// Start the prompt and read user input
@@ -203,15 +196,10 @@ impl<'a, E: Editor> Prompt<'a, E> {
                 },
                 Event::Home => cursor = 0,
                 Event::End => cursor = buffer.len(),
-                Event::Interrupt if buffer.is_empty() => {
+                Event::Interrupt | Event::Eof if buffer.is_empty() => {
                     self.display_buffer(&mut w, &buffer)?;
                     writeln!(w)?;
                     return Err(Error::Interrupt);
-                }
-                Event::Eof if buffer.is_empty() => {
-                    self.display_buffer(&mut w, &buffer)?;
-                    writeln!(w)?;
-                    return Err(Error::Eof);
                 }
                 Event::Interrupt => {
                     self.display_buffer(&mut w, &buffer)?;
@@ -221,7 +209,6 @@ impl<'a, E: Editor> Prompt<'a, E> {
                     written += self.redraw(&mut w, &buffer, width)?;
                 }
                 #[cfg(unix)]
-                #[allow(unsafe_code)]
                 Event::Suspend => unsafe {
                     // SIGTSTP is what usually happens -- the process gets put in the background
                     libc::kill(std::process::id() as i32, libc::SIGTSTP);

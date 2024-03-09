@@ -1,10 +1,8 @@
 // pomprt, a line editor prompt library
 // Copyright (c) 2023 rini
 //
-// pomprt is distributed under the Apache License version 2.0, as per COPYING
 // SPDX-License-Identifier: Apache-2.0
 
-#[derive(Default)]
 struct Rainbow;
 
 impl pomprt::Editor for Rainbow {
@@ -20,10 +18,10 @@ impl pomprt::Editor for Rainbow {
 }
 
 fn main() {
-    let mut pom = pomprt::with(Rainbow, "><> ");
+    let mut rainbow = pomprt::with(Rainbow, "><> ");
 
     loop {
-        match pom.read() {
+        match rainbow.read() {
             Ok(input) => println!("\x1b[37m{input}"),
             Err(pomprt::Eof) => return println!("\x1b[31mctrl-d"),
             Err(pomprt::Interrupt) => return println!("\x1b[31mctrl-c"),

@@ -162,7 +162,6 @@ pub trait Editor {
 }
 
 /// A basic editor with no extra features
-#[derive(Default)]
 pub struct Basic;
 
 impl Editor for Basic {}
