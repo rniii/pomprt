@@ -252,6 +252,26 @@ impl<'a, E: Editor> Prompt<'a, E> {
                     cursor = buffer.len();
                     written += self.redraw(&mut w, &buffer, width)?;
                 }
+                Event::Clear => {
+                    write!(w, "\x1b[H\x1b[2J")?;
+                    written += self.redraw(&mut w, &buffer, width)?;
+                }
+                Event::LeftWord => {
+                    while cursor > 0 {
+                        cursor -= 1;
+                        if !buffer[..cursor].ends_with(E::is_word) {
+                            break;
+                        }
+                    }
+                }
+                Event::RightWord => {
+                    while cursor < buffer.len() {
+                        cursor += 1;
+                        if !buffer[cursor..].starts_with(E::is_word) {
+                            break;
+                        }
+                    }
+                }
                 _ => continue,
             }
 

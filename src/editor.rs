@@ -41,6 +41,12 @@ pub enum Event {
     Up,
     /// Selects next history input
     Down,
+    /// Clears the screen
+    Clear,
+    /// Moves back one word
+    LeftWord,
+    /// Moves forward one word
+    RightWord,
 }
 
 /// Custom editor behaviour for a [`crate::Prompt`]
@@ -60,15 +66,18 @@ pub trait Editor {
                 Ansi::Control(b'M') => Event::Enter,
                 Ansi::Control(b'?' | b'H') => Event::Backspace,
                 Ansi::Control(b'I') => Event::Tab,
-                Ansi::Control(b'B') | Ansi::Csi([b'D']) => Event::Left,
-                Ansi::Control(b'F') | Ansi::Csi([b'C']) => Event::Right,
-                Ansi::Control(b'A') | Ansi::Csi([b'H']) => Event::Home,
-                Ansi::Control(b'E') | Ansi::Csi([b'F']) => Event::End,
+                Ansi::Control(b'B') | Ansi::Csi(b"D") => Event::Left,
+                Ansi::Control(b'F') | Ansi::Csi(b"C") => Event::Right,
+                Ansi::Control(b'A') | Ansi::Csi(b"H") => Event::Home,
+                Ansi::Control(b'E') | Ansi::Csi(b"F") => Event::End,
                 Ansi::Control(b'C') => Event::Interrupt,
                 Ansi::Control(b'D') => Event::Eof,
                 Ansi::Control(b'Z') => Event::Suspend,
-                Ansi::Csi([b'A']) => Event::Up,
-                Ansi::Csi([b'B']) => Event::Down,
+                Ansi::Csi(b"A") => Event::Up,
+                Ansi::Csi(b"B") => Event::Down,
+                Ansi::Control(b'L') => Event::Clear,
+                Ansi::Csi(b"1;5D" | b"1;3D") => Event::LeftWord,
+                Ansi::Csi(b"1;5C" | b"1;3C") => Event::RightWord,
                 _ => continue,
             };
 
@@ -144,6 +153,11 @@ pub trait Editor {
         let _ = buffer;
         let _ = cursor;
         false
+    }
+
+    /// Returns `true` if the given character is a word character
+    fn is_keyword(c: char) -> bool {
+        !c.is_ascii() || c.is_ascii_alphanumeric() || c == '_'
     }
 }
 

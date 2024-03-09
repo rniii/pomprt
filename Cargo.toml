@@ -1,6 +1,6 @@
 [package]
 name = "pomprt"
-version = "0.5.1"
+version = "0.5.2"
 authors = ["rini <rini@rinici.de>"]
 edition = "2021"
 description = "A tiny readline implementation built from scratch"
