@@ -45,6 +45,7 @@ mod editor;
 mod prompt;
 
 pub use editor::{Basic, Completion, Editor, Event};
+#[doc(inline)]
 pub use prompt::{Error, Error::Eof, Error::Interrupt, Prompt};
 
 /// Construct a new [`Prompt`]

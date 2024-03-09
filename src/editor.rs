@@ -8,9 +8,14 @@ use std::io;
 use crate::ansi::{Ansi, AnsiStdin};
 
 /// Completion result returned by [`Editor::complete`]
-pub struct Completion(pub std::ops::Range<usize>, pub Vec<String>);
+pub struct Completion(
+    /// Replacement range
+    pub std::ops::Range<usize>,
+    /// Candidates to be replaced with
+    pub Vec<String>,
+);
 
-/// Edit event emitted by [`Editor::read_key`] to [`crate::Prompt`]
+/// Edit event emitted by [`Editor::next_event`] to [`crate::Prompt`]
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum Event {
     /// Inserts a character and moves the cursor
@@ -111,7 +116,7 @@ pub trait Editor {
         *cursor += 2;
     }
 
-    /// Highlights the current input by adding [ANSI color](SGR) sequences
+    /// Highlights the current input by adding [ANSI color][SGR] sequences
     ///
     /// See also [`Editor::highlight_prompt`] and [`Editor::highlight_hint`]
     ///

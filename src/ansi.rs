@@ -16,7 +16,7 @@ pub enum Ansi<'a> {
     Control(u8),
     /// An [extended control character](https://en.wikipedia.org/wiki/C0_and_C1_control_codes)
     Esc(u8),
-    /// A [Control Sequence Introducer](CSI) sequence
+    /// A [Control Sequence Introducer][CSI] sequence
     ///
     /// [CSI]: (https://en.wikipedia.org/wiki/ANSI_escape_code#CSI_(Control_Sequence_Introducer)_sequences)
     Csi(&'a [u8]),
@@ -31,7 +31,7 @@ pub struct AnsiReader<R: Read> {
     buffer: Vec<u8>,
 }
 
-/// A reader around
+/// ANSI reader on standard input
 pub type AnsiStdin<'a> = AnsiReader<StdinLock<'a>>;
 
 impl<R: Read> AnsiReader<R> {
