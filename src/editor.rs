@@ -62,7 +62,122 @@ pub enum Event {
 ///
 /// [`examples`]: https://codeberg.org/rini/pomprt/src/branch/main/examples
 pub trait Editor {
-    /// Reads ANSI sequences from input and returns an editor event
+    /// Highlights the current input by adding [ANSI color][SGR] sequences.
+    ///
+    /// See also [`Editor::highlight_prompt`] and [`Editor::highlight_hint`]
+    ///
+    /// # Implementation notes
+    ///
+    /// The returned string should have the same length when displayed (including whitespace), so
+    /// only "invisible" sequences like SGR should be added.
+    ///
+    /// [SGR]: https://en.wikipedia.org/wiki/ANSI_escape_code#SGR_(Select_Graphic_Rendition)_parameters
+    fn highlight(&self, buffer: &str) -> String {
+        buffer.to_owned()
+    }
+
+    /// Highlights the current prompt.
+    ///
+    /// See [`Editor::highlight`] for more information.
+    fn highlight_prompt(&self, prompt: &str, multiline: bool) -> String {
+        let _ = multiline;
+        prompt.to_owned()
+    }
+
+    /// Returns a hint for the current input, if available.
+    ///
+    /// This hint will be shown on the next line.
+    fn hint(&self, buffer: &str) -> Option<String> {
+        let _ = buffer;
+        None
+    }
+
+    /// Highlights the current [hint][Editor::hint].
+    ///
+    /// See [`Editor::highlight`] for more information.
+    fn highlight_hint(&self, hint: &str) -> String {
+        hint.to_owned()
+    }
+
+    /// Provides completion if available.
+    ///
+    /// Returning [`Some`] will cause [`Event::Tab`] to cycle through all results in the [`Vec`],
+    /// replacing `buffer[start..end]` until another key is pressed. Otherwise, [`Editor::indent`]
+    /// is called.
+    fn complete(&self, buffer: &str, cursor: usize) -> Option<Completion> {
+        let _ = buffer;
+        let _ = cursor;
+        None
+    }
+
+    /// Inserts indentation at the current cursor position when [`Editor::complete`] returns none.
+    fn indent(&self, buffer: &mut String, cursor: &mut usize) {
+        buffer.insert_str(*cursor, "  ");
+        *cursor += 2;
+    }
+
+    /// Returns `true` if the current input should be continued on another line.
+    fn is_multiline(&self, buffer: &str, cursor: usize) -> bool {
+        let _ = buffer;
+        let _ = cursor;
+        false
+    }
+
+    /// Returns `true` if the given character is a word character.
+    ///
+    /// This affects word movement keybinds (e.g. Ctrl-Right).
+    fn is_keyword(c: char) -> bool {
+        !c.is_ascii() || c.is_ascii_alphanumeric() || c == '_'
+    }
+
+    /// Inserts a character at the current cursor position, moving it forward.
+    ///
+    /// # Example
+    ///
+    /// Auto-closing parenthesis. A [better example](https://codeberg.org/rini/pomprt/src/branch/main/examples/parens.rs)
+    /// can be found in the repo.
+    ///
+    /// ```
+    /// # use pomprt::*;
+    /// # struct Meow;
+    /// # impl Editor for Meow {
+    /// fn insert(&self, buffer: &mut String, cursor: &mut usize, c: char) {
+    ///     buffer.insert(*cursor, c);
+    ///     *cursor += c.len_utf8(); // Move forward
+    ///
+    ///     if c == '(' {
+    ///         buffer.insert(*cursor, ')');
+    ///     }
+    /// }
+    /// # }
+    /// ```
+    fn insert(&self, buffer: &mut String, cursor: &mut usize, c: char) {
+        buffer.insert(*cursor, c);
+        *cursor += c.len_utf8();
+    }
+
+    /// Reads ANSI sequences from input and returns an editor event.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use pomprt::{ansi::Ansi, *};
+    /// # use std::io;
+    /// # struct Nya;
+    /// # impl Editor for Nya {
+    /// fn next_event(&mut self, input: &mut ansi::Reader<impl io::Read>) -> io::Result<Event> {
+    ///     loop {
+    ///         let event = match input.read_sequence()? {
+    ///             Ansi::Char(c) => Event::Insert(c),
+    ///             Ansi::Control(b'C') => Event::Interrupt,
+    ///             _ => continue,
+    ///         };
+    ///
+    ///         return Ok(event);
+    ///     }
+    /// }
+    /// # }
+    /// ```
     fn next_event(&mut self, input: &mut Reader<impl io::Read>) -> io::Result<Event> {
         loop {
             let event = match input.read_sequence()? {
@@ -89,84 +204,9 @@ pub trait Editor {
             return Ok(event);
         }
     }
-
-    /// Inserts a character at the current cursor position, moving it forward
-    ///
-    /// Note that `cursor` should always lie inside a char boundary. This can usually be achieved
-    /// by adding [`char::len_utf8`] to it, instead of adding just `1` to move it forward.
-    fn insert(&self, buffer: &mut String, cursor: &mut usize, c: char) {
-        buffer.insert(*cursor, c);
-        *cursor += c.len_utf8();
-    }
-
-    /// Provides completion if available
-    ///
-    /// Returning [`Some`] will cause [`Event::Tab`] to cycle through all results in the [`Vec`],
-    /// replacing `buffer[start..end]` until another key is pressed. Otherwise, [`Editor::indent`]
-    /// is called.
-    fn complete(&self, buffer: &str, cursor: usize) -> Option<Completion> {
-        let _ = buffer;
-        let _ = cursor;
-        None
-    }
-
-    /// Inserts indentation at the current cursor position when [`Editor::complete`] returns none
-    fn indent(&self, buffer: &mut String, cursor: &mut usize) {
-        buffer.insert_str(*cursor, "  ");
-        *cursor += 2;
-    }
-
-    /// Highlights the current input by adding [ANSI color][SGR] sequences
-    ///
-    /// See also [`Editor::highlight_prompt`] and [`Editor::highlight_hint`]
-    ///
-    /// # Implementation notes
-    ///
-    /// The returned string should have the same length when displayed (including whitespace), so
-    /// only "invisible" sequences like SGR should be added.
-    ///
-    /// [SGR]: https://en.wikipedia.org/wiki/ANSI_escape_code#SGR_(Select_Graphic_Rendition)_parameters
-    fn highlight(&self, buffer: &str) -> String {
-        buffer.to_owned()
-    }
-
-    /// Highlights the current prompt
-    ///
-    /// See [`Editor::highlight`] for more information
-    fn highlight_prompt(&self, prompt: &str, multiline: bool) -> String {
-        let _ = multiline;
-        prompt.to_owned()
-    }
-
-    /// Returns a hint for the current input, if available
-    ///
-    /// This hint will be shown on the next line
-    fn hint(&self, buffer: &str) -> Option<String> {
-        let _ = buffer;
-        None
-    }
-
-    /// Highlights the current hint
-    ///
-    /// See [`Editor::highlight`] for more information
-    fn highlight_hint(&self, hint: &str) -> String {
-        hint.to_owned()
-    }
-
-    /// Returns `true` if the current input should be continued on another line
-    fn is_multiline(&self, buffer: &str, cursor: usize) -> bool {
-        let _ = buffer;
-        let _ = cursor;
-        false
-    }
-
-    /// Returns `true` if the given character is a word character
-    fn is_keyword(c: char) -> bool {
-        !c.is_ascii() || c.is_ascii_alphanumeric() || c == '_'
-    }
 }
 
-/// A basic editor with no extra features
+/// A basic editor with no extra features.
 pub struct Basic;
 
 impl Editor for Basic {}

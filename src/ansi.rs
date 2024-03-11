@@ -4,6 +4,24 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Helper module for reading and parsing ANSI sequences
+//!
+//! ```
+//! # fn main() -> std::io::Result<()> {
+//! # use pomprt::ansi::*;
+//! # let mut reader = Reader::new(&b":3c\x03"[..]);
+//! # let mut buffer = String::new();
+//! # let mut cursor = 0;
+//! # loop {
+//! match reader.read_sequence()? {
+//!     Ansi::Char(c) => buffer.insert(cursor, c),
+//!     Ansi::Control(b'C') => break,
+//!     // ...
+//!     # _ => continue,
+//! }
+//! # }
+//! # Ok(())
+//! # }
+//! ```
 
 use std::io::{self, Read};
 
@@ -41,7 +59,7 @@ impl<R: Read> Reader<R> {
     }
 
     #[inline]
-    fn read_byte(&mut self) -> io::Result<u8> {
+    fn next_byte(&mut self) -> io::Result<u8> {
         let p = self.buffer.len();
         self.buffer.push(0);
         self.input.read_exact(&mut self.buffer[p..=p])?;
@@ -51,8 +69,9 @@ impl<R: Read> Reader<R> {
     /// Reads a single [Ansi] sequence from input
     pub fn read_sequence(&mut self) -> io::Result<Ansi> {
         self.buffer.clear();
-        Ok(match self.read_byte()? {
+        Ok(match self.next_byte()? {
             b @ 0x80.. => {
+                // Rust, utf-8 is not black magic. Please let me read `char`s normally
                 // https://en.wikipedia.org/wiki/UTF-8#Encoding_process
                 let size = match b {
                     0xf0.. => 4,
@@ -66,15 +85,12 @@ impl<R: Read> Reader<R> {
                 let char = str.chars().next().unwrap();
                 Ansi::Char(char)
             }
-            ESC => match self.read_byte()? {
+            ESC => match self.next_byte()? {
                 b'[' => {
-                    while !matches!(self.read_byte()?, 0x40..=0x7e) {}
+                    while !matches!(self.next_byte()?, 0x40..=0x7e) {}
                     Ansi::Csi(&self.buffer[2..])
                 }
-                // TODO: this modifies the character set of the next byte
-                // (some terminals seem to use this for home/end???)
-                // b'N' => { /* single-shift 2 */ }
-                // b'O' => { /* single-shift 3 */ }
+                // TODO: SS2/3 sequences?
                 c => Ansi::Esc(c),
             },
             // *technically,* DEL isn't C0, but we include it here

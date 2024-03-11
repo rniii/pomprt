@@ -8,8 +8,6 @@ use std::io::{self, IsTerminal, Write};
 use crate::{ansi, Basic};
 use crate::{Completion, Editor, Event};
 
-type BufStdout<'a> = io::BufWriter<io::StdoutLock<'a>>;
-
 /// Error returned by [`Prompt::read`]
 #[derive(Debug)]
 #[non_exhaustive]
@@ -111,7 +109,7 @@ impl<'a, E: Editor> Prompt<'a, E> {
 
         let _raw = RawMode::acquire();
         let mut r = ansi::Reader::new(io::stdin().lock());
-        let mut w = BufStdout::new(io::stdout().lock());
+        let mut w = io::BufWriter::new(io::stdout().lock());
 
         let mut history_entry = self.history.len();
         let mut saved_entry = String::new();
@@ -291,7 +289,7 @@ impl<'a, E: Editor> Prompt<'a, E> {
         }
     }
 
-    fn display_buffer(&self, w: &mut BufStdout, buf: &str) -> io::Result<()> {
+    fn display_buffer(&self, w: &mut impl Write, buf: &str) -> io::Result<()> {
         write!(w, "\r\x1b[J")?;
 
         let hl = self.editor.highlight(buf) + " ";
@@ -306,7 +304,7 @@ impl<'a, E: Editor> Prompt<'a, E> {
         Ok(())
     }
 
-    fn redraw(&self, w: &mut BufStdout, buf: &str, width: usize) -> io::Result<usize> {
+    fn redraw(&self, w: &mut impl Write, buf: &str, width: usize) -> io::Result<usize> {
         self.display_buffer(w, buf)?;
         let mut lines = count_lines(self.buf_lengths(buf), width);
         if let Some(hint) = self.editor.hint(buf) {
