@@ -3,7 +3,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use std::io::{self, IsTerminal, Write};
+use std::io::{self, IsTerminal, Read, Write};
 
 use crate::{ansi, Basic};
 use crate::{Completion, Editor, Event};
@@ -93,23 +93,41 @@ impl<'a, E: Editor> Prompt<'a, E> {
 
     /// Start the prompt and read user input
     ///
+    /// By default, it will use regular stdin and stdout. If stdin is not a terminal, no prompt
+    /// will be shown. If stdout is not a terminal, it will instead fall back to stderr. See
+    /// [`read_from`](Prompt::read_from) for specifying i/o.
+    ///
     /// # Errors
     ///
     /// May return [`Error::Eof`] or [`Error::Interrupt`] on user input. Other errors might occur:
     /// see [`Error`]
     pub fn read(&mut self) -> Result<String, Error> {
-        let mut buffer = String::with_capacity(128);
-
         if !io::stdin().is_terminal() {
+            let mut buffer = String::with_capacity(128);
             if io::stdin().read_line(&mut buffer)? == 0 {
                 return Err(Error::Eof);
             }
             return Ok(buffer);
         }
 
+        if io::stdout().is_terminal() {
+            self.read_from(io::stdin().lock(), io::stdout().lock())
+        } else {
+            self.read_from(io::stdin().lock(), io::stderr().lock())
+        }
+    }
+
+    /// Start the prompt and read user input, specifying stdin/stdout.
+    ///
+    /// # Errors
+    ///
+    /// See [`read`][Prompt::read]
+    pub fn read_from(&mut self, input: impl Read, output: impl Write) -> Result<String, Error> {
+        let mut buffer = String::with_capacity(128);
+
         let _raw = RawMode::acquire();
-        let mut r = ansi::Reader::new(io::stdin().lock());
-        let mut w = io::BufWriter::new(io::stdout().lock());
+        let mut r = ansi::Reader::new(input);
+        let mut w = io::BufWriter::new(output);
 
         let mut history_entry = self.history.len();
         let mut saved_entry = String::new();
