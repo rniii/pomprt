@@ -139,7 +139,10 @@ impl<'a, E: Editor> Prompt<'a, E> {
 
         loop {
             let cur_completion = completion.take();
-            let width = rawrrr::get_size().map_or(80, |(w, _)| w);
+            let width = match rawrrr::get_size() {
+                Some((w, _)) if w > 0 => w,
+                _ => 80,
+            };
             let mut written = 0;
             match self.editor.next_event(&mut r)? {
                 Event::Insert(c) => {
