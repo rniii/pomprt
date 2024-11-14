@@ -42,6 +42,8 @@ pub enum Event {
     Eof,
     /// Suspends the program (Unix only)
     Suspend,
+    /// Aborts the program, usually triggering a coredump
+    Abort,
     /// Selects previous history input
     Up,
     /// Selects next history input
@@ -193,6 +195,7 @@ pub trait Editor {
                 Ansi::Control(b'C') => Event::Interrupt,
                 Ansi::Control(b'D') => Event::Eof,
                 Ansi::Control(b'Z') => Event::Suspend,
+                Ansi::Control(b'\\') => Event::Abort,
                 Ansi::Csi(b"A") => Event::Up,
                 Ansi::Csi(b"B") => Event::Down,
                 Ansi::Control(b'L') => Event::Clear,

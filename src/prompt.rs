@@ -125,7 +125,7 @@ impl<'a, E: Editor> Prompt<'a, E> {
     pub fn read_from(&mut self, input: impl Read, output: impl Write) -> Result<String, Error> {
         let mut buffer = String::with_capacity(128);
 
-        let _raw = RawMode::acquire();
+        let raw = RawMode::acquire();
         let mut r = ansi::Reader::new(input);
         let mut w = io::BufWriter::new(output);
 
@@ -188,7 +188,7 @@ impl<'a, E: Editor> Prompt<'a, E> {
                             completion = None;
                         }
                         Some(c) => {
-                            buffer = c.buffer.clone();
+                            buffer.clone_from(&c.buffer);
                             buffer.replace_range(c.range.clone(), &c.results[c.current]);
                             cursor = c.range.start + c.results[c.current].len();
                             c.current = (c.current + 1) % c.results.len();
@@ -229,7 +229,7 @@ impl<'a, E: Editor> Prompt<'a, E> {
                     buffer.clear();
                     written += self.redraw(&mut w, &buffer, width)?;
                 }
-                #[cfg(unix)]
+                #[cfg(all(unix, feature = "suspend"))]
                 Event::Suspend => unsafe {
                     // SIGTSTP is what usually happens -- the process gets put in the background
                     libc::kill(std::process::id() as i32, libc::SIGTSTP);
@@ -237,6 +237,11 @@ impl<'a, E: Editor> Prompt<'a, E> {
                     rawrrr::enable_raw();
                     written += self.redraw(&mut w, &buffer, width)?;
                 },
+                #[cfg(feature = "abort")]
+                Event::Abort => {
+                    drop(raw);
+                    std::process::abort()
+                }
                 Event::Up if history_entry > 0 => {
                     if history_entry == self.history.len() {
                         saved_entry = buffer;

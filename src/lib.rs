@@ -39,6 +39,13 @@
 //! That's it! More complete examples can be found in the [`examples`] folder.
 //!
 //! [`examples`]: https://codeberg.org/rini/pomprt/src/branch/main/examples
+//!
+//! ## Crate features
+//!
+//! | Feature name  | Description |
+//! | ------------- | ----------- |
+//! | `abort`       | Enables [`Event::Abort`] (`C-\`), which triggers a coredump |
+//! | `suspend`     | Enables [`Event::Suspend`] (`C-z`), which sends `SIGTSTP` (Unix only) |
 
 #![warn(missing_docs, clippy::doc_markdown)]
 
